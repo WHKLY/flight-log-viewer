@@ -8,8 +8,6 @@ dependencies = []
 [project.optional-dependencies]
 log-parsing = [
   "pymavlink",
-  "numpy",
-  "pandas",
 ]
 
 [tool.ruff]
