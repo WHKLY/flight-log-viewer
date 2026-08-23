@@ -10,9 +10,12 @@ Date: 2026-08-23
 - The viewer uses a shared time window across time-series charts.
 - Time-series charts show absolute time on the bottom axis and flight-mode bands on the top axis.
 - Mode buttons focus the full flight, `MANUAL`, `STABILIZE`, or `AUTO` ranges found in the actual log.
-- Each chart supports mouse wheel zoom, drag pan, checkbox-based curve visibility, hover readout, click-to-lock readout, and double-click unlock.
+- Each time-series chart supports shared-time mouse wheel zoom, shared-time drag pan, checkbox-based curve visibility, hover readout, click-to-lock readout, and double-click unlock.
+- Time-series vertical scale is chart-local state. Shared time-axis zoom/pan filters the visible samples but does not automatically rescale the Y axis.
+- `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale.
 - Layers can be collapsed to keep the dashboard usable on a tablet screen.
 - The track panel is filtered by the same time window so mode focus changes the visible flight-path segment.
+- The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, with independent map pan, map zoom, and `Reset map`.
 
 ## Current sample
 
@@ -35,3 +38,5 @@ When they differ, data parsing should trust the log's own `FMT` schema first. Co
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
+
+A later UI refinement should add explicit touch gestures for Y-axis scaling on tablets, because `Shift + wheel` is convenient on desktop but not ideal for touch-only use.

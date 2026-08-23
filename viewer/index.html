@@ -244,6 +244,18 @@
         font-size: 13px;
       }
 
+      .chart-control-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .chart-control-bar button {
+        font-size: 12px;
+        padding: 5px 9px;
+      }
+
       .legend label {
         align-items: center;
         display: inline-flex;
@@ -403,7 +415,12 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">滚轮缩放，拖拽平移，点击锁定读数。</div>
+          <div class="readout" id="${id}-readout">滚轮缩放共享时间，Shift+滚轮缩放纵轴，拖拽平移时间，点击锁定读数。</div>
+        </div>
+        <div class="chart-control-bar">
+          <button data-scale-reset="${id}">Reset scale</button>
+          <button data-scale-in="${id}">Scale +</button>
+          <button data-scale-out="${id}">Scale -</button>
         </div>
         <div class="legend" id="${id}-legend"></div>`;
       }
@@ -512,12 +529,12 @@
         });
       }
 
-      function valueRange(seriesList, xStart, xEnd) {
+      function yRangeForSeries(seriesList) {
         let minY = Infinity;
         let maxY = -Infinity;
         for (const seriesItem of seriesList) {
           for (const point of seriesItem.points) {
-            if (point.x < xStart || point.x > xEnd || !finite(point.y)) continue;
+            if (!finite(point.y)) continue;
             minY = Math.min(minY, point.y);
             maxY = Math.max(maxY, point.y);
           }
@@ -528,6 +545,25 @@
         }
         const padY = (maxY - minY) * 0.08 || 1;
         return { minY: minY - padY, maxY: maxY + padY };
+      }
+
+      function cloneRange(range) {
+        return { minY: range.minY, maxY: range.maxY };
+      }
+
+      function resetLineScale(config) {
+        config.yView = cloneRange(config.defaultYView || yRangeForSeries(config.series));
+      }
+
+      function zoomLineY(config, factor, anchorRatio = 0.5) {
+        if (!config.yView) resetLineScale(config);
+        const span = config.yView.maxY - config.yView.minY;
+        const nextSpan = Math.max(span * factor, 1e-9);
+        const anchor = config.yView.maxY - anchorRatio * span;
+        config.yView = {
+          minY: anchor - (1 - anchorRatio) * nextSpan,
+          maxY: anchor + anchorRatio * nextSpan,
+        };
       }
 
       function visibleSeries(config) {
@@ -598,7 +634,8 @@
         const xStart = state.range.start;
         const xEnd = state.range.end;
         const activeSeries = visibleSeries(config);
-        const yRange = valueRange(activeSeries, xStart, xEnd);
+        if (!config.yView) resetLineScale(config);
+        const yRange = config.yView;
         const xScale = (x) => pad.left + ((x - xStart) / (xEnd - xStart)) * plotW;
         const yScale = (y) => pad.top + (1 - (y - yRange.minY) / (yRange.maxY - yRange.minY)) * plotH;
         config.xScale = xScale;
@@ -681,8 +718,57 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "滚轮缩放，拖拽平移，点击锁定读数。";
+          readout.textContent = "滚轮缩放共享时间，Shift+滚轮缩放纵轴，拖拽平移时间，点击锁定读数。";
         }
+      }
+
+      function projectTrack(config) {
+        if (config.projected) return config.projected;
+        const rawPoints = [
+          ...config.posRows.filter((row) => finite(Number(row.Lat)) && finite(Number(row.Lng))).map((row) => ({ kind: "pos", lat: Number(row.Lat), lon: Number(row.Lng), time_s: Number(row.time_s), row })),
+          ...config.waypointRows.filter((row) => finite(Number(row.lat)) && finite(Number(row.lon))).map((row) => ({ kind: "wp", lat: Number(row.lat), lon: Number(row.lon), row })),
+        ];
+        const refLat = rawPoints.reduce((sum, point) => sum + point.lat, 0) / Math.max(1, rawPoints.length);
+        const refLon = rawPoints.reduce((sum, point) => sum + point.lon, 0) / Math.max(1, rawPoints.length);
+        const latScale = 110540;
+        const lonScale = 111320 * Math.cos((refLat * Math.PI) / 180);
+        config.projected = rawPoints.map((point) => ({
+          ...point,
+          x: (point.lon - refLon) * lonScale,
+          y: (point.lat - refLat) * latScale,
+        }));
+        return config.projected;
+      }
+
+      function fitTrackView(config, plotW, plotH) {
+        const points = projectTrack(config);
+        if (!points.length) {
+          config.mapView = { cx: 0, cy: 0, metersPerPx: 1 };
+          config.defaultMapView = { ...config.mapView };
+          return;
+        }
+        const minX = Math.min(...points.map((point) => point.x));
+        const maxX = Math.max(...points.map((point) => point.x));
+        const minY = Math.min(...points.map((point) => point.y));
+        const maxY = Math.max(...points.map((point) => point.y));
+        const spanX = maxX - minX || 1;
+        const spanY = maxY - minY || 1;
+        const metersPerPx = Math.max(spanX / Math.max(1, plotW), spanY / Math.max(1, plotH)) * 1.08;
+        config.mapView = { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, metersPerPx };
+        config.defaultMapView = { ...config.mapView };
+      }
+
+      function resetTrackScale(config) {
+        if (config.defaultMapView) config.mapView = { ...config.defaultMapView };
+      }
+
+      function zoomTrack(config, factor, anchorX, anchorY, plot) {
+        if (!config.mapView) return;
+        const beforeX = config.mapView.cx + (anchorX - (plot.left + plot.width / 2)) * config.mapView.metersPerPx;
+        const beforeY = config.mapView.cy - (anchorY - (plot.top + plot.height / 2)) * config.mapView.metersPerPx;
+        config.mapView.metersPerPx = Math.max(config.mapView.metersPerPx * factor, 0.01);
+        config.mapView.cx = beforeX - (anchorX - (plot.left + plot.width / 2)) * config.mapView.metersPerPx;
+        config.mapView.cy = beforeY + (anchorY - (plot.top + plot.height / 2)) * config.mapView.metersPerPx;
       }
 
       function drawTrackChart(config) {
@@ -696,62 +782,74 @@
         ctx.scale(dpr, dpr);
         const width = rect.width;
         const height = rect.height;
-        const pad = 24;
-        const posRows = config.posRows.filter((row) => row.time_s >= state.range.start && row.time_s <= state.range.end);
-        const all = [
-          ...config.posRows.map((row) => ({ lat: row.Lat, lon: row.Lng })),
-          ...config.waypointRows.filter((row) => row.lat && row.lon).map((row) => ({ lat: row.lat, lon: row.lon })),
-        ];
-        const minLat = Math.min(...all.map((p) => p.lat));
-        const maxLat = Math.max(...all.map((p) => p.lat));
-        const minLon = Math.min(...all.map((p) => p.lon));
-        const maxLon = Math.max(...all.map((p) => p.lon));
-        const scaleX = (lon) => pad + ((lon - minLon) / (maxLon - minLon || 1)) * (width - pad * 2);
-        const scaleY = (lat) => height - pad - ((lat - minLat) / (maxLat - minLat || 1)) * (height - pad * 2);
+        const pad = { left: 28, right: 16, top: 22, bottom: 28 };
+        const plot = { left: pad.left, top: pad.top, width: width - pad.left - pad.right, height: height - pad.top - pad.bottom };
+        if (!config.mapView) fitTrackView(config, plot.width, plot.height);
+
+        const projected = projectTrack(config);
+        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const wpPoints = projected.filter((point) => point.kind === "wp");
+        const sx = (x) => plot.left + plot.width / 2 + (x - config.mapView.cx) / config.mapView.metersPerPx;
+        const sy = (y) => plot.top + plot.height / 2 - (y - config.mapView.cy) / config.mapView.metersPerPx;
 
         ctx.clearRect(0, 0, width, height);
         ctx.strokeStyle = "#d7ded6";
         ctx.lineWidth = 1;
-        for (let i = 0; i <= 4; i++) {
-          const x = pad + ((width - pad * 2) * i) / 4;
-          const y = pad + ((height - pad * 2) * i) / 4;
+        const gridMeters = Math.pow(10, Math.floor(Math.log10(config.mapView.metersPerPx * 90)));
+        const gridStep = gridMeters < config.mapView.metersPerPx * 42 ? gridMeters * 2 : gridMeters;
+        const leftWorld = config.mapView.cx - (plot.width / 2) * config.mapView.metersPerPx;
+        const rightWorld = config.mapView.cx + (plot.width / 2) * config.mapView.metersPerPx;
+        const bottomWorld = config.mapView.cy - (plot.height / 2) * config.mapView.metersPerPx;
+        const topWorld = config.mapView.cy + (plot.height / 2) * config.mapView.metersPerPx;
+        for (let x = Math.floor(leftWorld / gridStep) * gridStep; x <= rightWorld; x += gridStep) {
           ctx.beginPath();
-          ctx.moveTo(x, pad);
-          ctx.lineTo(x, height - pad);
-          ctx.moveTo(pad, y);
-          ctx.lineTo(width - pad, y);
+          ctx.moveTo(sx(x), plot.top);
+          ctx.lineTo(sx(x), plot.top + plot.height);
+          ctx.stroke();
+        }
+        for (let y = Math.floor(bottomWorld / gridStep) * gridStep; y <= topWorld; y += gridStep) {
+          ctx.beginPath();
+          ctx.moveTo(plot.left, sy(y));
+          ctx.lineTo(plot.left + plot.width, sy(y));
           ctx.stroke();
         }
 
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(plot.left, plot.top, plot.width, plot.height);
+        ctx.clip();
         ctx.strokeStyle = colors.gold;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        config.waypointRows.forEach((row, index) => {
-          if (!row.lat || !row.lon) return;
-          const x = scaleX(row.lon);
-          const y = scaleY(row.lat);
-          if (index === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+        wpPoints.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+          else ctx.lineTo(sx(point.x), sy(point.y));
         });
         ctx.stroke();
 
         ctx.strokeStyle = colors.green;
         ctx.lineWidth = 2.3;
         ctx.beginPath();
-        downsample(posRows.map((row) => ({ x: scaleX(row.Lng), y: scaleY(row.Lat) }))).forEach((point, index) => {
-          if (index === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
+        downsample(posPoints).forEach((point, index) => {
+          if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+          else ctx.lineTo(sx(point.x), sy(point.y));
         });
         ctx.stroke();
 
         ctx.fillStyle = colors.gold;
-        config.waypointRows.forEach((row) => {
-          if (!row.lat || !row.lon) return;
+        wpPoints.forEach((point) => {
           ctx.beginPath();
-          ctx.arc(scaleX(row.lon), scaleY(row.lat), 3, 0, Math.PI * 2);
+          ctx.arc(sx(point.x), sy(point.y), 3, 0, Math.PI * 2);
           ctx.fill();
         });
-        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posRows.length}`;
+        ctx.restore();
+
+        ctx.strokeStyle = "#17211d";
+        ctx.strokeRect(plot.left, plot.top, plot.width, plot.height);
+        ctx.fillStyle = "#607068";
+        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
+        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posPoints.length} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -771,6 +869,48 @@
         });
       }
 
+      function prepareChartScale(config) {
+        if (config.type === "line") {
+          config.defaultYView = yRangeForSeries(config.series);
+          resetLineScale(config);
+        }
+      }
+
+      function bindScaleControls(config) {
+        const reset = document.querySelector(`[data-scale-reset="${config.id}"]`);
+        const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
+        const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
+        if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
+        config.controlsBound = true;
+        if (config.type === "track") {
+          reset.textContent = "Reset map";
+          zoomIn.textContent = "Map +";
+          zoomOut.textContent = "Map -";
+        } else {
+          reset.textContent = "Reset Y";
+          zoomIn.textContent = "Y +";
+          zoomOut.textContent = "Y -";
+        }
+        reset.addEventListener("click", () => {
+          if (config.type === "track") resetTrackScale(config);
+          else resetLineScale(config);
+          renderAllCharts();
+        });
+        zoomIn.addEventListener("click", () => {
+          if (config.type === "track") {
+            config.mapView.metersPerPx = Math.max(config.mapView.metersPerPx * 0.82, 0.01);
+          } else {
+            zoomLineY(config, 0.82);
+          }
+          renderAllCharts();
+        });
+        zoomOut.addEventListener("click", () => {
+          if (config.type === "track") config.mapView.metersPerPx *= 1.22;
+          else zoomLineY(config, 1.22);
+          renderAllCharts();
+        });
+      }
+
       function renderAllCharts() {
         for (const config of charts.values()) {
           if (config.type === "track") drawTrackChart(config);
@@ -785,6 +925,21 @@
         canvas.addEventListener("wheel", (event) => {
           event.preventDefault();
           const rect = canvas.getBoundingClientRect();
+          if (config.type === "track") {
+            const pad = { left: 28, right: 16, top: 22, bottom: 28 };
+            const plot = { left: pad.left, top: pad.top, width: rect.width - pad.left - pad.right, height: rect.height - pad.top - pad.bottom };
+            zoomTrack(config, event.deltaY < 0 ? 0.82 : 1.22, event.clientX - rect.left, event.clientY - rect.top, plot);
+            drawTrackChart(config);
+            return;
+          }
+          if (event.shiftKey) {
+            const pad = { left: 52, right: 16, top: 38, bottom: 34 };
+            const plotH = rect.height - pad.top - pad.bottom;
+            const anchorRatio = Math.max(0, Math.min(1, (event.clientY - rect.top - pad.top) / Math.max(1, plotH)));
+            zoomLineY(config, event.deltaY < 0 ? 0.82 : 1.22, anchorRatio);
+            drawLineChart(config);
+            return;
+          }
           const ratio = (event.clientX - rect.left) / rect.width;
           const anchor = state.range.start + (state.range.end - state.range.start) * ratio;
           const factor = event.deltaY < 0 ? 0.82 : 1.22;
@@ -793,12 +948,24 @@
         }, { passive: false });
         canvas.addEventListener("pointerdown", (event) => {
           canvas.setPointerCapture(event.pointerId);
-          state.dragging = { x: event.clientX, start: state.range.start, end: state.range.end };
+          if (config.type === "track") {
+            state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
+          } else {
+            state.dragging = { chartId: config.id, type: "time", x: event.clientX, start: state.range.start, end: state.range.end };
+          }
         });
         canvas.addEventListener("pointermove", (event) => {
           const rect = canvas.getBoundingClientRect();
+          if (state.dragging?.chartId === config.id && state.dragging.type === "map") {
+            const dx = event.clientX - state.dragging.x;
+            const dy = event.clientY - state.dragging.y;
+            config.mapView.cx = state.dragging.cx - dx * config.mapView.metersPerPx;
+            config.mapView.cy = state.dragging.cy + dy * config.mapView.metersPerPx;
+            drawTrackChart(config);
+            return;
+          }
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
-          if (state.dragging) {
+          if (state.dragging?.chartId === config.id && state.dragging.type === "time") {
             const dx = event.clientX - state.dragging.x;
             const dt = (-dx / rect.width) * (state.dragging.end - state.dragging.start);
             setRange(state.dragging.start + dt, state.dragging.end + dt, "pan");
@@ -834,8 +1001,10 @@
       function registerCharts(configs) {
         charts.clear();
         for (const config of configs) {
+          prepareChartScale(config);
           charts.set(config.id, config);
           renderLegend(config);
+          bindScaleControls(config);
           bindChartEvents(config);
         }
         renderAllCharts();
