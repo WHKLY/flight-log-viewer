@@ -16,10 +16,14 @@ Date: 2026-08-23
 - Time-series charts draw a zero-axis line when `y = 0` is inside the current Y-axis window.
 - Mode transition times are drawn as vertical guide lines across every time-series chart.
 - Touch interaction is supported: one-finger drag pans, two-finger pinch zooms time/Y on time-series charts and map scale on the track chart.
+- User-defined horizontal Y reference lines can be added per time-series chart and move with that chart's Y-axis pan/zoom.
+- User-defined vertical time reference lines can be added globally and appear on every time-series chart.
 - Layers can be collapsed to keep the dashboard usable on a tablet screen.
+- The waypoint table is shown as a full scrollable table instead of being truncated to the first ten rows.
 - The track panel is filtered by the same time window so mode focus changes the visible flight-path segment.
 - `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale; pan is handled by direct drag rather than extra buttons.
 - The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent drag pan, map zoom, and `Reset map`.
+- A custom data layer lets the user choose any loaded message and numeric field, then append it as a curve on a shared-time custom chart.
 
 ## Current sample
 

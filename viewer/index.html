@@ -27,6 +27,8 @@
         --mode-other: rgba(103, 80, 154, 0.22);
         --zero-line: rgba(161, 61, 49, 0.72);
         --mode-transition: rgba(23, 33, 29, 0.5);
+        --custom-h-ref: rgba(154, 107, 22, 0.88);
+        --custom-time-ref: rgba(36, 107, 147, 0.88);
       }
 
       * {
@@ -253,15 +255,48 @@
       }
 
       .chart-control-bar {
+        align-items: center;
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
         margin-top: 8px;
       }
 
-      .chart-control-bar button {
+      .chart-control-bar button,
+      .chart-control-bar input,
+      .custom-controls button,
+      .custom-controls select {
         font-size: 12px;
         padding: 5px 9px;
+      }
+
+      .chart-control-bar input,
+      .custom-controls select {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+      }
+
+      .table-scroll {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        max-height: 330px;
+        overflow: auto;
+      }
+
+      .table-scroll table {
+        min-width: 100%;
+      }
+
+      .custom-controls {
+        display: grid;
+        gap: 8px;
+      }
+
+      .custom-controls label {
+        display: grid;
+        gap: 4px;
       }
 
       .legend label {
@@ -339,6 +374,8 @@
           --mode-other: rgba(167, 139, 250, 0.34);
           --zero-line: rgba(255, 147, 135, 0.82);
           --mode-transition: rgba(247, 255, 249, 0.62);
+          --custom-h-ref: rgba(242, 195, 107, 0.92);
+          --custom-time-ref: rgba(115, 199, 241, 0.92);
         }
 
         body {
@@ -415,6 +452,8 @@
         hidden: {},
         hover: {},
         pinned: {},
+        hRefs: {},
+        timeRefs: [],
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -441,7 +480,7 @@
       }
 
       function table(rows, columns, limit = 12) {
-        const visible = rows.slice(0, limit);
+        const visible = limit === null ? rows : rows.slice(0, limit);
         if (!visible.length) return `<p>No data.</p>`;
         const head = columns.map((column) => `<th>${column.label}</th>`).join("");
         const body = visible
@@ -478,6 +517,9 @@
           <button data-scale-reset="${id}">Reset scale</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
+          <input data-href-input="${id}" type="number" step="any" placeholder="Y ref" />
+          <button data-href-add="${id}">Add Y ref</button>
+          <button data-href-clear="${id}">Clear Y refs</button>
         </div>
         <div class="legend" id="${id}-legend"></div>`;
       }
@@ -567,6 +609,9 @@
           <div class="chart-actions">
             <button id="zoom-out">Zoom out</button>
             <button id="clear-pins">Clear readouts</button>
+            <input id="time-ref-input" type="number" step="any" placeholder="Time ref s" />
+            <button id="add-time-ref">Add T ref</button>
+            <button id="clear-time-refs">Clear T refs</button>
           </div>
         </div>`;
         renderModeButtons();
@@ -574,6 +619,21 @@
         document.querySelector("#zoom-out").addEventListener("click", () => focusMode("all"));
         document.querySelector("#clear-pins").addEventListener("click", () => {
           state.pinned = {};
+          renderAllCharts();
+        });
+        const timeRefInput = document.querySelector("#time-ref-input");
+        document.querySelector("#add-time-ref").addEventListener("click", () => {
+          const value = Number(timeRefInput.value);
+          if (!finite(value)) return;
+          state.timeRefs.push(value);
+          timeRefInput.value = "";
+          renderAllCharts();
+        });
+        timeRefInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") document.querySelector("#add-time-ref").click();
+        });
+        document.querySelector("#clear-time-refs").addEventListener("click", () => {
+          state.timeRefs = [];
           renderAllCharts();
         });
       }
@@ -699,6 +759,52 @@
         ctx.restore();
       }
 
+      function drawHorizontalRefs(ctx, config, yScale, yRange, pad, plotW) {
+        const refs = state.hRefs[config.id] || [];
+        if (!refs.length) return;
+        ctx.save();
+        ctx.strokeStyle = cssVar("--custom-h-ref");
+        ctx.fillStyle = cssVar("--custom-h-ref");
+        ctx.lineWidth = 1.4;
+        ctx.setLineDash([10, 5]);
+        ctx.font = "12px Avenir Next, sans-serif";
+        for (const value of refs) {
+          if (!finite(value) || value < yRange.minY || value > yRange.maxY) continue;
+          const y = yScale(value);
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + plotW, y);
+          ctx.stroke();
+          ctx.fillText(`Y ${fmt.format(value)}`, pad.left + 8, y - 6);
+        }
+        ctx.restore();
+      }
+
+      function drawTimeRefs(ctx, chart, pad, plotW, plotH) {
+        if (!state.timeRefs.length) return;
+        ctx.save();
+        ctx.strokeStyle = cssVar("--custom-time-ref");
+        ctx.fillStyle = cssVar("--custom-time-ref");
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([9, 5]);
+        ctx.font = "12px Avenir Next, sans-serif";
+        for (const time of state.timeRefs) {
+          if (!finite(time) || time < state.range.start || time > state.range.end) continue;
+          const x = chart.xScale(time);
+          if (x <= pad.left || x >= pad.left + plotW) continue;
+          ctx.beginPath();
+          ctx.moveTo(x, pad.top);
+          ctx.lineTo(x, pad.top + plotH);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(x + 4, pad.top + plotH - 8);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(`T ${fmt.format(time)}s`, 0, 0);
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
       function drawModeBand(ctx, chart, pad, plotW) {
         const y = pad.top - 22;
         const height = 18;
@@ -771,9 +877,6 @@
           ctx.fillText(fmt.format(value) + "s", x - 15, height - 12);
         }
 
-        drawModeTransitions(ctx, config, pad, plotW, plotH);
-        drawZeroLine(ctx, yScale, yRange, pad, plotW);
-
         if (config.yLabel) ctx.fillText(config.yLabel, 6, 14);
         ctx.fillText("flight mode", pad.left, 14);
 
@@ -800,6 +903,11 @@
           ctx.stroke();
         }
         ctx.restore();
+
+        drawModeTransitions(ctx, config, pad, plotW, plotH);
+        drawTimeRefs(ctx, config, pad, plotW, plotH);
+        drawZeroLine(ctx, yScale, yRange, pad, plotW);
+        drawHorizontalRefs(ctx, config, yScale, yRange, pad, plotW);
 
         const marker = state.pinned[config.id] || state.hover[config.id];
         const readout = document.querySelector(`#${config.id}-readout`);
@@ -1013,12 +1121,18 @@
         const reset = document.querySelector(`[data-scale-reset="${config.id}"]`);
         const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
         const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
+        const hInput = document.querySelector(`[data-href-input="${config.id}"]`);
+        const hAdd = document.querySelector(`[data-href-add="${config.id}"]`);
+        const hClear = document.querySelector(`[data-href-clear="${config.id}"]`);
         if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
         config.controlsBound = true;
         if (config.type === "track") {
           reset.textContent = "Reset map";
           zoomIn.textContent = "Map +";
           zoomOut.textContent = "Map -";
+          hInput?.remove();
+          hAdd?.remove();
+          hClear?.remove();
         } else {
           reset.textContent = "Reset Y";
           zoomIn.textContent = "Y +";
@@ -1040,6 +1154,21 @@
         zoomOut.addEventListener("click", () => {
           if (config.type === "track") config.mapView.metersPerPx *= 1.22;
           else zoomLineY(config, 1.22);
+          renderAllCharts();
+        });
+        hAdd?.addEventListener("click", () => {
+          const value = Number(hInput.value);
+          if (!finite(value)) return;
+          state.hRefs[config.id] ||= [];
+          state.hRefs[config.id].push(value);
+          hInput.value = "";
+          renderAllCharts();
+        });
+        hInput?.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") hAdd.click();
+        });
+        hClear?.addEventListener("click", () => {
+          state.hRefs[config.id] = [];
           renderAllCharts();
         });
       }
@@ -1239,6 +1368,67 @@
         });
       }
 
+      function buildDataCatalog(groups) {
+        const catalog = {};
+        for (const group of groups) {
+          for (const [messageName, rows] of Object.entries(group.messages || {})) {
+            if (!Array.isArray(rows) || !rows.length) continue;
+            catalog[messageName] = rows;
+          }
+        }
+        return catalog;
+      }
+
+      function numericFields(rows) {
+        const fields = new Set();
+        for (const row of rows.slice(0, 250)) {
+          for (const [key, value] of Object.entries(row)) {
+            if (key === "TimeUS" || key === "time_s") continue;
+            if (finite(Number(value))) fields.add(key);
+          }
+        }
+        return [...fields].sort();
+      }
+
+      function bindCustomChartControls(catalog) {
+        const messageSelect = document.querySelector("#custom-message");
+        const fieldSelect = document.querySelector("#custom-field");
+        const addButton = document.querySelector("#custom-add");
+        const clearButton = document.querySelector("#custom-clear");
+        if (!messageSelect || !fieldSelect || !addButton || !clearButton) return;
+        const messages = Object.keys(catalog).sort();
+        messageSelect.innerHTML = messages.map((name) => `<option value="${name}">${name} (${catalog[name].length})</option>`).join("");
+        const refreshFields = () => {
+          const rows = catalog[messageSelect.value] || [];
+          const fields = numericFields(rows);
+          fieldSelect.innerHTML = fields.map((field) => `<option value="${field}">${field}</option>`).join("");
+        };
+        messageSelect.addEventListener("change", refreshFields);
+        refreshFields();
+        addButton.addEventListener("click", () => {
+          const messageName = messageSelect.value;
+          const fieldName = fieldSelect.value;
+          if (!messageName || !fieldName) return;
+          const config = charts.get("custom-chart");
+          const palette = [colors.blue, colors.green, colors.red, colors.gold, colors.violet, colors.teal, colors.gray];
+          config.series.push(series(catalog[messageName], fieldName, palette[config.series.length % palette.length], `${messageName}.${fieldName}`));
+          config.defaultYView = yRangeForSeries(config.series);
+          resetLineScale(config);
+          renderLegend(config);
+          renderAllCharts();
+        });
+        clearButton.addEventListener("click", () => {
+          const config = charts.get("custom-chart");
+          config.series = [];
+          state.hidden[config.id] = {};
+          state.hRefs[config.id] = [];
+          config.defaultYView = yRangeForSeries(config.series);
+          resetLineScale(config);
+          renderLegend(config);
+          renderAllCharts();
+        });
+      }
+
       function registerCharts(configs) {
         charts.clear();
         for (const config of configs) {
@@ -1317,11 +1507,13 @@
             "Track / Geometry",
             "航迹层展示当前时间窗口内的实际路径和任务航点；它为 L1 横向制导提供误差来源。",
             chartPanel("track-chart"),
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3>${table(summary.waypoints, [
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command" },
+              { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
+              { key: "lon", label: "Lon", format: (v) => fmt.format(v) },
               { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
-            ], 10)}`,
+            ], null)}</div>`,
           ),
           layer(
             2,
@@ -1350,6 +1542,13 @@
             "执行层展示 RC 输入和 SRV 输出；这是控制链末端，用来验证上层需求是否导致舵面/油门动作。",
             chartPanel("io-chart"),
             `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div><p>通道语义后续应结合 <code>SERVO*_FUNCTION</code> 参数映射，而不是固定假设 C1/C2/C3/C4。</p>`,
+          ),
+          layer(
+            6,
+            "Custom Data",
+            "自定义图表用于临时检查任意已解析消息字段；适合在进入固定参数分析面板前做探索。",
+            chartPanel("custom-chart"),
+            `<div class="custom-controls"><h3>Build custom chart</h3><label>Message<select id="custom-message"></select></label><label>Numeric field<select id="custom-field"></select></label><button id="custom-add">Add curve</button><button id="custom-clear">Clear custom chart</button><p>曲线加入后会跟随共享时间轴、模式竖线、全局 T 参考线和本图 Y 参考线。</p></div>`,
           ),
         ].join("");
 
@@ -1428,7 +1627,9 @@
               series(io.messages.RCIN, "C1", colors.gray, "RCIN C1"),
             ],
           },
+          { id: "custom-chart", type: "line", yLabel: "custom", series: [] },
         ]);
+        bindCustomChartControls(buildDataCatalog([track, attitude, navigation, tecs, pid, io, events]));
         window.addEventListener("resize", renderAllCharts);
       }
 
