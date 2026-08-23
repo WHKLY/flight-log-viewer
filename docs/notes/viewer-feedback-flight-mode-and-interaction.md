@@ -73,3 +73,23 @@ Before changing the viewer, improve generated data:
 - Add helper metadata for AUTO ranges.
 
 Then update viewer interaction around this mode timeline.
+
+## Correction: Mode Mapping
+
+The sample log reports firmware text `ArduPlane V4.4.4 (16b78382)`. Local source inspection confirms Plane mode numbers include:
+
+- `0`: `MANUAL`
+- `2`: `STABILIZE`
+- `5`: `FBWA` / `FLY_BY_WIRE_A`
+- `10`: `AUTO`
+
+Therefore this sample mode sequence should be interpreted as:
+
+```text
+760.769s  MANUAL
+784.069s  STABILIZE
+922.669s  AUTO
+930.228s  STABILIZE
+```
+
+Earlier notes that described `ModeNum=2` as `FBWA` were incorrect.
