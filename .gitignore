@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Local data and generated files
+data/raw/
+public-data/*.json
+docs/source-review/extracted/
+
+# Termux/editor noise
+.DS_Store
+.vscode/
+

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flight Log Viewer</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #16201b;
+        --muted: #627069;
+        --line: #d6ddd7;
+        --paper: #f8faf6;
+        --panel: #ffffff;
+        --accent: #126a57;
+        --warn: #b05a22;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(135deg, rgba(18, 106, 87, 0.12), transparent 34%),
+          linear-gradient(315deg, rgba(176, 90, 34, 0.12), transparent 40%),
+          var(--paper);
+        color: var(--ink);
+        font-family: "Avenir Next", "Gill Sans", sans-serif;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 18px 48px;
+      }
+
+      header {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        letter-spacing: 0;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      section,
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      section {
+        margin-top: 14px;
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
+      .metric {
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+
+      code {
+        background: #eef3ee;
+        border-radius: 4px;
+        padding: 2px 5px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 8px 6px;
+        text-align: left;
+      }
+
+      .empty {
+        color: var(--warn);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Flight Log Viewer</h1>
+        <p>ArduPilot Plane log package summary. Run <code>python3 scripts/summarize_dataset.py</code> first.</p>
+      </header>
+
+      <div class="grid" id="metrics"></div>
+
+      <section>
+        <h2>Selected Files</h2>
+        <div id="selected-files"></div>
+      </section>
+
+      <section>
+        <h2>Control Parameters</h2>
+        <div id="params"></div>
+      </section>
+
+      <section>
+        <h2>Mission Waypoints</h2>
+        <div id="waypoints"></div>
+      </section>
+    </main>
+
+    <script>
+      async function loadSummary() {
+        const response = await fetch("../public-data/dataset-summary.json");
+        if (!response.ok) throw new Error("dataset-summary.json not found");
+        return response.json();
+      }
+
+      function metric(label, value) {
+        return `<div class="card"><p>${label}</p><div class="metric">${value}</div></div>`;
+      }
+
+      function table(rows, columns) {
+        if (!rows.length) return '<p class="empty">No data.</p>';
+        const head = columns.map((column) => `<th>${column.label}</th>`).join("");
+        const body = rows
+          .map((row) => `<tr>${columns.map((column) => `<td>${row[column.key] ?? ""}</td>`).join("")}</tr>`)
+          .join("");
+        return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+      }
+
+      loadSummary()
+        .then((summary) => {
+          document.querySelector("#metrics").innerHTML = [
+            metric("Files", summary.counts.files),
+            metric("Parameters", summary.counts.parameters),
+            metric("Control Params", summary.counts.control_parameters),
+            metric("Waypoints", summary.counts.waypoints),
+          ].join("");
+
+          document.querySelector("#selected-files").innerHTML = `<pre>${JSON.stringify(
+            summary.selected_files,
+            null,
+            2,
+          )}</pre>`;
+
+          const params = Object.entries(summary.control_params).map(([name, value]) => ({ name, value }));
+          document.querySelector("#params").innerHTML = table(params, [
+            { key: "name", label: "Parameter" },
+            { key: "value", label: "Value" },
+          ]);
+
+          document.querySelector("#waypoints").innerHTML = table(summary.waypoints, [
+            { key: "index", label: "#" },
+            { key: "command_name", label: "Command" },
+            { key: "lat", label: "Lat" },
+            { key: "lon", label: "Lon" },
+            { key: "alt", label: "Alt" },
+          ]);
+        })
+        .catch((error) => {
+          document.querySelector("#metrics").innerHTML = `<p class="empty">${error.message}</p>`;
+        });
+    </script>
+  </body>
+</html>
+

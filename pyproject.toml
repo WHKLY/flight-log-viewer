@@ -1,0 +1,17 @@
+[project]
+name = "flight-log-viewer"
+version = "0.1.0"
+description = "Offline ArduPilot fixed-wing log viewer and control-parameter analyzer."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+log-parsing = [
+  "pymavlink",
+  "numpy",
+  "pandas",
+]
+
+[tool.ruff]
+line-length = 100
+
