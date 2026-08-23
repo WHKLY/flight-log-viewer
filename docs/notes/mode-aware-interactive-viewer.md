@@ -27,6 +27,10 @@ Date: 2026-08-23
 - `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale; pan is handled by direct drag rather than extra buttons.
 - The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent drag pan, map zoom, and `Reset map` with a clamped default map scale.
 - A custom data layer lets the user choose any loaded message and numeric field, then append it as a curve on a shared-time custom chart.
+
+- A Motion / IMU layer now loads inertial and estimator families when present: `IMU`, `IMU2/3`, `ACC*`, `GYR*`, `VIBE`, `RATE`, `XKF*`, and legacy `NKF*`.
+- The fixed Motion chart shows direct acceleration (`IMU.AccX/AccY/AccZ`), gyro (`IMU.GyrX/GyrY/GyrZ`), vibration (`VIBE.VibeX/Y/Z`), and EKF velocity (`XKF1.VN/VE/VD`) for the current time/mode window.
+- All extracted inertial/EKF numeric fields are also available in the Custom Data layer for ad-hoc plotting without adding more fixed panels.
 - Missing generated JSON files no longer block the whole viewer; absent groups fall back to empty data and the compatibility panel lists what is missing.
 - `extract_dataflash_series.py` writes empty series and manifest output when no `.BIN` file is present, so waypoint-only or parameter-only packages can still be opened after `summarize_dataset.py` runs.
 

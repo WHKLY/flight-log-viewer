@@ -529,6 +529,11 @@
       };
 
       const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+      const motionMessageNames = [
+        "IMU", "IMU2", "IMU3", "ACC", "ACC2", "ACC3", "GYR", "GYR2", "GYR3", "VIBE", "RATE",
+        "XKF0", "XKF1", "XKF2", "XKF3", "XKF4", "XKF5", "XKFD", "XKFM", "XKFS", "XKT", "XKTV", "XKV1", "XKV2", "XKY0", "XKY1",
+        "NKF0", "NKF1", "NKF2", "NKF3", "NKF4", "NKF5",
+      ];
       const state = {
         fullRange: { start: 0, end: 1 },
         range: { start: 0, end: 1 },
@@ -1644,11 +1649,12 @@
           loadJsonOptional("../public-data/series/navigation.json"),
           loadJsonOptional("../public-data/series/tecs.json"),
           loadJsonOptional("../public-data/series/pid.json"),
+          loadJsonOptional("../public-data/series/motion.json"),
           loadJsonOptional("../public-data/series/io.json"),
           loadJsonOptional("../public-data/series/events.json"),
           loadJsonOptional("../public-data/series/modes.json"),
         ]);
-        const [summaryRaw, manifestRaw, trackRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, ioRaw, eventsRaw, modesRaw] = loaded;
+        const [summaryRaw, manifestRaw, trackRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw] = loaded;
         const summary = summaryRaw || defaultSummary();
         const manifest = manifestRaw || defaultManifest();
         const track = withMessages(trackRaw, ["POS", "GPS"]);
@@ -1656,6 +1662,7 @@
         const navigation = withMessages(navigationRaw, ["CTUN", "NTUN"]);
         const tecs = withMessages(tecsRaw, ["TECS", "TEC2", "ARSP"]);
         const pid = withMessages(pidRaw, ["PIDR", "PIDP", "PIDY"]);
+        const motion = withMessages(motionRaw, motionMessageNames);
         const io = withMessages(ioRaw, ["RCOU", "RCIN"]);
         const events = withMessages(eventsRaw, ["MODE", "MSG"]);
         const modes = modesRaw || { compatibility: manifest.compatibility, mode_map_source: manifest.compatibility.mode_map_source, mode_map: {}, segments: [], focus_ranges: {} };
@@ -1667,12 +1674,13 @@
           ["navigation", navigationRaw],
           ["tecs", tecsRaw],
           ["pid", pidRaw],
+          ["motion", motionRaw],
           ["io", ioRaw],
           ["events", eventsRaw],
           ["modes", modesRaw],
         ].filter(([, value]) => !value).map(([name]) => name);
         modeData = modes;
-        const fallbackRange = rangeFromLoadedGroups([track, attitude, navigation, tecs, pid, io, events]);
+        const fallbackRange = rangeFromLoadedGroups([track, attitude, navigation, tecs, pid, motion, io, events]);
         const full = manifest.source?.time_range || fallbackRange;
         state.fullRange = { start: full.start_s ?? 0, end: full.end_s ?? 1 };
         state.range = { ...state.fullRange };
@@ -1758,13 +1766,20 @@
           ),
           layer(
             5,
+            "Motion / IMU",
+            "惯性层集中查看机体加速度、角速度、振动和 EKF 速度/状态；判断飞机加速度优先看 IMU.AccX/AccY/AccZ。",
+            chartPanel("motion-chart"),
+            `<h3>Motion records</h3><div class="note">IMU ${motion.messages.IMU.length}<br>VIBE ${motion.messages.VIBE.length}<br>XKF1 ${motion.messages.XKF1.length}<br>XKF2 ${motion.messages.XKF2.length}<br>RATE ${motion.messages.RATE.length}</div><p><code>IMU.AccX/AccY/AccZ</code> 是最直接的三轴加速度字段；<code>VIBE</code> 用来看振动/削波，<code>XKF1</code> 是 EKF 估计速度。</p>`,
+          ),
+          layer(
+            6,
             "I/O Outputs",
             "执行层展示 RC 输入和 SRV 输出；这是控制链末端，用来验证上层需求是否导致舵面/油门动作。",
             chartPanel("io-chart"),
             `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div><p>通道语义后续应结合 <code>SERVO*_FUNCTION</code> 参数映射，而不是固定假设 C1/C2/C3/C4。</p>`,
           ),
           layer(
-            6,
+            7,
             "Custom Data",
             "自定义图表用于临时检查任意已解析消息字段；适合在进入固定参数分析面板前做探索。",
             chartPanel("custom-chart"),
@@ -1838,6 +1853,25 @@
             ],
           },
           {
+            id: "motion-chart",
+            type: "line",
+            yLabel: "accel / gyro / mps",
+            series: [
+              series(motion.messages.IMU, "AccX", colors.blue, "IMU AccX"),
+              series(motion.messages.IMU, "AccY", colors.green, "IMU AccY"),
+              series(motion.messages.IMU, "AccZ", colors.red, "IMU AccZ"),
+              series(motion.messages.IMU, "GyrX", colors.gold, "IMU GyrX"),
+              series(motion.messages.IMU, "GyrY", colors.violet, "IMU GyrY"),
+              series(motion.messages.IMU, "GyrZ", colors.teal, "IMU GyrZ"),
+              series(motion.messages.VIBE, "VibeX", colors.gray, "VIBE X"),
+              series(motion.messages.VIBE, "VibeY", colors.blue, "VIBE Y"),
+              series(motion.messages.VIBE, "VibeZ", colors.gold, "VIBE Z"),
+              series(motion.messages.XKF1, "VN", colors.green, "EKF VN"),
+              series(motion.messages.XKF1, "VE", colors.red, "EKF VE"),
+              series(motion.messages.XKF1, "VD", colors.violet, "EKF VD"),
+            ],
+          },
+          {
             id: "io-chart",
             type: "line",
             yLabel: "PWM",
@@ -1851,7 +1885,7 @@
           },
           { id: "custom-chart", type: "line", yLabel: "custom", series: [] },
         ]);
-        bindCustomChartControls(buildDataCatalog([track, attitude, navigation, tecs, pid, io, events]));
+        bindCustomChartControls(buildDataCatalog([track, attitude, navigation, tecs, pid, motion, io, events]));
         window.addEventListener("resize", renderAllCharts);
       }
 
