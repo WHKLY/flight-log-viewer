@@ -370,26 +370,48 @@ def main() -> int:
     dataset = args.dataset.expanduser().resolve()
     files = [path for path in dataset.iterdir() if path.is_file()]
     bin_file = choose_source(files, ".bin")
-    if bin_file is None:
-        raise SystemExit(f"No .BIN file found in {dataset}")
-
-    rows, metadata = extract_dataflash(bin_file)
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    time_range = time_range_from_rows(rows)
-    mode_payload = build_mode_segments(rows.get("MODE", []), time_range["start_s"], time_range["end_s"])
-    firmware = extract_firmware(rows.get("MSG", []))
-    compatibility = {
-        "log_firmware": firmware,
-        "parser_schema": "DataFlash FMT from log",
-        "mode_map_source": MODE_MAP_SOURCE,
-        "explanation_source": EXPLANATION_SOURCE,
-        "notes": [
-            "Log firmware, provided docs, and local source checkout may differ.",
-            "Message schemas are decoded from this log's FMT records.",
-        ],
-    }
+    if bin_file is None:
+        rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        metadata = {
+            "source_file": None,
+            "size_bytes": 0,
+            "skipped_regions": 0,
+            "formats_seen": 0,
+            "target_counts": {},
+            "target_formats": {},
+        }
+        time_range = {"start_s": None, "end_s": None}
+        firmware = None
+        compatibility = {
+            "log_firmware": None,
+            "parser_schema": "no DataFlash log loaded",
+            "mode_map_source": MODE_MAP_SOURCE,
+            "explanation_source": EXPLANATION_SOURCE,
+            "notes": [
+                "No .BIN DataFlash log was found; generated empty series so other files can still be viewed.",
+            ],
+        }
+        mode_payload = build_mode_segments([], None, None)
+        source_name = None
+    else:
+        rows, metadata = extract_dataflash(bin_file)
+        time_range = time_range_from_rows(rows)
+        mode_payload = build_mode_segments(rows.get("MODE", []), time_range["start_s"], time_range["end_s"])
+        firmware = extract_firmware(rows.get("MSG", []))
+        compatibility = {
+            "log_firmware": firmware,
+            "parser_schema": "DataFlash FMT from log",
+            "mode_map_source": MODE_MAP_SOURCE,
+            "explanation_source": EXPLANATION_SOURCE,
+            "notes": [
+                "Log firmware, provided docs, and local source checkout may differ.",
+                "Message schemas are decoded from this log's FMT records.",
+            ],
+        }
+        source_name = bin_file.name
 
     manifest = {
         "source": {**metadata, "time_range": time_range},
@@ -398,10 +420,10 @@ def main() -> int:
     }
     for group_name, message_names in SERIES_GROUPS.items():
         if group_name == "modes":
-            group_payload = {"source_file": bin_file.name, "compatibility": compatibility, **mode_payload}
+            group_payload = {"source_file": source_name, "compatibility": compatibility, **mode_payload}
         else:
             group_payload = {
-                "source_file": bin_file.name,
+                "source_file": source_name,
                 "messages": {name: rows.get(name, []) for name in message_names},
             }
         relative_path = f"series/{group_name}.json"
@@ -412,7 +434,7 @@ def main() -> int:
         }
 
     write_json(output_dir / "manifest.json", manifest)
-    print(f"Source: {bin_file.name}")
+    print(f"Source: {source_name or 'none'}")
     print(json.dumps(metadata["target_counts"], ensure_ascii=False, indent=2))
     print(f"Wrote {output_dir}")
     return 0

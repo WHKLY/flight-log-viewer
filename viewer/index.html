@@ -47,15 +47,37 @@
       }
 
       main {
-        max-width: 1260px;
+        display: grid;
+        gap: 18px;
+        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
         margin: 0 auto;
-        padding: 28px 16px 48px;
+        max-width: 1500px;
+        padding: 18px 16px 48px;
+      }
+
+      .control-panel {
+        align-self: start;
+        display: grid;
+        gap: 12px;
+        max-height: calc(100dvh - 36px);
+        overflow-y: auto;
+        padding-right: 4px;
+        position: sticky;
+        top: 18px;
+      }
+
+      .viewer-panel {
+        min-width: 0;
       }
 
       header {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
         display: grid;
         gap: 8px;
-        margin-bottom: 16px;
+        padding: 14px;
       }
 
       h1,
@@ -110,9 +132,9 @@
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 10px;
-        margin: 18px 0;
+        grid-template-columns: 1fr;
+        margin: 0;
       }
 
       .metric {
@@ -138,7 +160,7 @@
         border: 1px solid var(--line);
         border-radius: 10px;
         box-shadow: var(--shadow);
-        margin-bottom: 14px;
+        margin-bottom: 0;
         padding: 12px;
       }
 
@@ -166,7 +188,7 @@
         border: 1px solid var(--line);
         border-radius: 10px;
         box-shadow: var(--shadow);
-        margin-top: 14px;
+        margin-top: 0;
         overflow: hidden;
       }
 
@@ -200,7 +222,7 @@
 
       .layer-body {
         display: grid;
-        grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+        grid-template-columns: minmax(0, 1.7fr) minmax(240px, 0.45fr);
         gap: 14px;
         padding: 14px;
       }
@@ -396,6 +418,7 @@
             var(--paper);
         }
 
+        header,
         .metric,
         .notice,
         .toolbar,
@@ -411,6 +434,16 @@
       }
 
       @media (max-width: 860px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+
+        .control-panel {
+          max-height: none;
+          overflow: visible;
+          position: static;
+        }
+
         .layer-head,
         .layer-body {
           display: grid;
@@ -432,15 +465,18 @@
   </head>
   <body>
     <main>
-      <header>
-        <h1>Flight Log Viewer</h1>
-        <p>按 ArduPlane 控制层级组织：Flight Mode / Mission、航迹、L1、TECS、姿态/角速度、执行输出。</p>
-      </header>
-
-      <div class="metrics" id="metrics"></div>
-      <div id="compatibility"></div>
-      <div id="timeline-toolbar"></div>
-      <div id="app"></div>
+      <aside class="control-panel">
+        <header>
+          <h1>Flight Log Viewer</h1>
+          <p>按 ArduPlane 控制层级组织：Flight Mode / Mission、航迹、L1、TECS、姿态/角速度、执行输出。</p>
+        </header>
+        <div class="metrics" id="metrics"></div>
+        <div id="compatibility"></div>
+        <div id="timeline-toolbar"></div>
+      </aside>
+      <section class="viewer-panel">
+        <div id="app"></div>
+      </section>
     </main>
 
     <script>
@@ -478,6 +514,52 @@
         return response.json();
       }
 
+      async function loadJsonOptional(path) {
+        try {
+          return await loadJson(path);
+        } catch (_error) {
+          return null;
+        }
+      }
+
+      function defaultSummary() {
+        return {
+          counts: { files: 0, parameters: 0, control_parameters: 0, waypoints: 0 },
+          files: [],
+          selected_files: { param: null, waypoints: null, bin_logs: [], tlogs: [], rlogs: [] },
+          duplicate_groups: {},
+          control_params: {},
+          waypoints: [],
+        };
+      }
+
+      function withMessages(data, names) {
+        const messages = {};
+        for (const name of names) messages[name] = data?.messages?.[name] || [];
+        return { source_file: data?.source_file || null, messages };
+      }
+
+      function defaultManifest() {
+        return {
+          source: { source_file: null, target_counts: {}, time_range: null },
+          compatibility: { log_firmware: null, parser_schema: "not loaded", mode_map_source: "not loaded", explanation_source: "not loaded", notes: [] },
+          groups: {},
+        };
+      }
+
+      function rangeFromLoadedGroups(groups) {
+        const values = [];
+        for (const group of groups) {
+          for (const rows of Object.values(group.messages || {})) {
+            for (const row of rows) if (finite(Number(row.time_s))) values.push(Number(row.time_s));
+          }
+        }
+        if (!values.length) return { start_s: 0, end_s: 1 };
+        const start = Math.min(...values);
+        const end = Math.max(...values);
+        return start === end ? { start_s: start, end_s: start + 1 } : { start_s: start, end_s: end };
+      }
+
       function metric(label, value) {
         return `<div class="metric"><p>${label}</p><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`;
       }
@@ -506,11 +588,11 @@
       }
 
       function layer(index, title, description, chartHtml, sideHtml) {
-        return `<section class="layer" data-layer="${index}">
+        return `<section class="layer collapsed" data-layer="${index}">
           <div class="layer-head">
             <div><h2>${title}</h2><p>${description}</p></div>
             <div class="layer-index">Layer ${index}</div>
-            <button class="layer-toggle" data-toggle-layer="${index}">收起</button>
+            <button class="layer-toggle" data-toggle-layer="${index}">展开</button>
           </div>
           <div class="layer-body">
             <div class="panel">${chartHtml}</div>
@@ -1513,39 +1595,64 @@
       }
 
       async function main() {
-        const [summary, manifest, track, attitude, navigation, tecs, pid, io, events, modes] = await Promise.all([
-          loadJson("../public-data/dataset-summary.json"),
-          loadJson("../public-data/series/manifest.json"),
-          loadJson("../public-data/series/track.json"),
-          loadJson("../public-data/series/attitude.json"),
-          loadJson("../public-data/series/navigation.json"),
-          loadJson("../public-data/series/tecs.json"),
-          loadJson("../public-data/series/pid.json"),
-          loadJson("../public-data/series/io.json"),
-          loadJson("../public-data/series/events.json"),
-          loadJson("../public-data/series/modes.json"),
+        const loaded = await Promise.all([
+          loadJsonOptional("../public-data/dataset-summary.json"),
+          loadJsonOptional("../public-data/series/manifest.json"),
+          loadJsonOptional("../public-data/series/track.json"),
+          loadJsonOptional("../public-data/series/attitude.json"),
+          loadJsonOptional("../public-data/series/navigation.json"),
+          loadJsonOptional("../public-data/series/tecs.json"),
+          loadJsonOptional("../public-data/series/pid.json"),
+          loadJsonOptional("../public-data/series/io.json"),
+          loadJsonOptional("../public-data/series/events.json"),
+          loadJsonOptional("../public-data/series/modes.json"),
         ]);
+        const [summaryRaw, manifestRaw, trackRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, ioRaw, eventsRaw, modesRaw] = loaded;
+        const summary = summaryRaw || defaultSummary();
+        const manifest = manifestRaw || defaultManifest();
+        const track = withMessages(trackRaw, ["POS", "GPS"]);
+        const attitude = withMessages(attitudeRaw, ["ATT", "AHR2", "XKQ"]);
+        const navigation = withMessages(navigationRaw, ["CTUN", "NTUN"]);
+        const tecs = withMessages(tecsRaw, ["TECS", "TEC2", "ARSP"]);
+        const pid = withMessages(pidRaw, ["PIDR", "PIDP", "PIDY"]);
+        const io = withMessages(ioRaw, ["RCOU", "RCIN"]);
+        const events = withMessages(eventsRaw, ["MODE", "MSG"]);
+        const modes = modesRaw || { compatibility: manifest.compatibility, mode_map_source: manifest.compatibility.mode_map_source, mode_map: {}, segments: [], focus_ranges: {} };
+        const missing = [
+          ["dataset-summary", summaryRaw],
+          ["manifest", manifestRaw],
+          ["track", trackRaw],
+          ["attitude", attitudeRaw],
+          ["navigation", navigationRaw],
+          ["tecs", tecsRaw],
+          ["pid", pidRaw],
+          ["io", ioRaw],
+          ["events", eventsRaw],
+          ["modes", modesRaw],
+        ].filter(([, value]) => !value).map(([name]) => name);
         modeData = modes;
-        const full = manifest.source.time_range || { start_s: track.messages.POS[0]?.time_s ?? 0, end_s: track.messages.POS.at(-1)?.time_s ?? 1 };
-        state.fullRange = { start: full.start_s, end: full.end_s };
+        const fallbackRange = rangeFromLoadedGroups([track, attitude, navigation, tecs, pid, io, events]);
+        const full = manifest.source?.time_range || fallbackRange;
+        state.fullRange = { start: full.start_s ?? 0, end: full.end_s ?? 1 };
         state.range = { ...state.fullRange };
 
         document.querySelector("#metrics").innerHTML = [
-          metric("DataFlash", manifest.source.source_file),
-          metric("Firmware", manifest.compatibility.log_firmware || "unknown"),
-          metric("Records", Object.values(manifest.source.target_counts).reduce((a, b) => a + b, 0)),
-          metric("Modes", [...new Set(modes.segments.map((segment) => segment.name))].join(" / ")),
-          metric("Params", summary.counts.parameters),
-          metric("Waypoints", summary.counts.waypoints),
+          metric("DataFlash", manifest.source?.source_file || "none"),
+          metric("Firmware", manifest.compatibility?.log_firmware || "unknown"),
+          metric("Records", Object.values(manifest.source?.target_counts || {}).reduce((a, b) => a + b, 0)),
+          metric("Modes", [...new Set((modes.segments || []).map((segment) => segment.name))].join(" / ") || "none"),
+          metric("Params", summary.counts?.parameters ?? 0),
+          metric("Waypoints", summary.counts?.waypoints ?? 0),
         ].join("");
 
         document.querySelector("#compatibility").innerHTML = `<div class="notice">
           <strong>兼容性策略</strong>
-          <p>日志固件：${escapeHtml(manifest.compatibility.log_firmware || "unknown")}；消息字段按日志内 DataFlash FMT 解码；模式号按 ${escapeHtml(modes.mode_map_source)} 映射，未知模式会显示为 <code>MODE_n</code>。解释层参考：${escapeHtml(manifest.compatibility.explanation_source)}。</p>
+          <p>日志固件：${escapeHtml(manifest.compatibility?.log_firmware || "unknown")}；消息字段按日志内 DataFlash FMT 解码；模式号按 ${escapeHtml(modes.mode_map_source || "not loaded")} 映射，未知模式会显示为 <code>MODE_n</code>。解释层参考：${escapeHtml(manifest.compatibility?.explanation_source || "not loaded")}。</p>
+          <p>缺失/未生成数据：${missing.length ? escapeHtml(missing.join(", ")) : "none"}。页面会显示已加载内容，缺失图层保持空图或空表。</p>
         </div>`;
         renderToolbar();
 
-        const modeRows = modes.segments.map((segment) => ({
+        const modeRows = (modes.segments || []).map((segment) => ({
           time_s: segment.mode_time_s,
           name: segment.name,
           mode_num: segment.mode_num,
@@ -1628,6 +1735,7 @@
             const section = document.querySelector(`[data-layer="${button.dataset.toggleLayer}"]`);
             section.classList.toggle("collapsed");
             button.textContent = section.classList.contains("collapsed") ? "展开" : "收起";
+            renderAllCharts();
           });
         });
         bindWaypointButtons();
