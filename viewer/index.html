@@ -48,8 +48,8 @@
 
       main {
         display: grid;
-        gap: 18px;
-        grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+        gap: 14px;
+        grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
         margin: 0 auto;
         max-width: 1500px;
         padding: 18px 16px 48px;
@@ -61,13 +61,46 @@
         gap: 12px;
         max-height: calc(100dvh - 36px);
         overflow-y: auto;
-        padding-right: 4px;
+        padding-right: 2px;
         position: sticky;
         top: 18px;
       }
 
       .viewer-panel {
         min-width: 0;
+      }
+
+      main.controls-collapsed {
+        grid-template-columns: 42px minmax(0, 1fr);
+      }
+
+      main.controls-collapsed .control-panel > :not(.control-strip) {
+        display: none;
+      }
+
+      .control-strip {
+        align-items: center;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 8px;
+      }
+
+      .control-title {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        writing-mode: vertical-rl;
+      }
+
+      main:not(.controls-collapsed) .control-title {
+        writing-mode: horizontal-tb;
       }
 
       header {
@@ -77,7 +110,7 @@
         box-shadow: var(--shadow);
         display: grid;
         gap: 8px;
-        padding: 14px;
+        padding: 12px;
       }
 
       h1,
@@ -88,7 +121,7 @@
       }
 
       h1 {
-        font-size: clamp(28px, 5vw, 42px);
+        font-size: clamp(22px, 4vw, 30px);
         letter-spacing: -0.03em;
       }
 
@@ -148,7 +181,7 @@
       .metric strong {
         display: block;
         color: var(--green);
-        font-size: 24px;
+        font-size: 20px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -266,6 +299,10 @@
         max-width: min(92%, 680px);
         padding: 7px 8px;
         position: absolute;
+      }
+
+      .readout:empty {
+        display: none;
       }
 
       .legend {
@@ -419,6 +456,7 @@
         }
 
         header,
+        .control-strip,
         .metric,
         .notice,
         .toolbar,
@@ -466,12 +504,12 @@
   <body>
     <main>
       <aside class="control-panel">
+        <div class="control-strip"><span class="control-title">Controls</span><button id="toggle-controls">Hide</button></div>
         <header>
           <h1>Flight Log Viewer</h1>
           <p>按 ArduPlane 控制层级组织：Flight Mode / Mission、航迹、L1、TECS、姿态/角速度、执行输出。</p>
         </header>
         <div class="metrics" id="metrics"></div>
-        <div id="compatibility"></div>
         <div id="timeline-toolbar"></div>
       </aside>
       <section class="viewer-panel">
@@ -604,7 +642,7 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">图内拖拽平移；左侧轴边拖动 Y 参考线；底部轴边拖动全局时间线；双指捏合缩放。</div>
+          <div class="readout" id="${id}-readout"></div>
         </div>
         <div class="chart-control-bar">
           <button data-scale-reset="${id}">Reset scale</button>
@@ -1042,7 +1080,7 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "图内拖拽平移；左侧轴边拖动 Y 参考线；底部轴边拖动全局时间线；双指捏合缩放。";
+          readout.textContent = "";
         }
       }
 
@@ -1092,17 +1130,20 @@
       function fitTrackView(config, plotW, plotH) {
         const points = projectTrack(config);
         if (!points.length) {
-          config.mapView = { cx: 0, cy: 0, metersPerPx: 1 };
+          config.mapView = { cx: 0, cy: 0, metersPerPx: 2 };
           config.defaultMapView = { ...config.mapView };
           return;
         }
-        const minX = Math.min(...points.map((point) => point.x));
-        const maxX = Math.max(...points.map((point) => point.x));
-        const minY = Math.min(...points.map((point) => point.y));
-        const maxY = Math.max(...points.map((point) => point.y));
-        const spanX = maxX - minX || 1;
-        const spanY = maxY - minY || 1;
-        const metersPerPx = Math.max(spanX / Math.max(1, plotW), spanY / Math.max(1, plotH)) * 1.08;
+        const preferred = points.some((point) => point.kind === "pos") ? points.filter((point) => point.kind === "pos") : points.filter((point) => point.kind === "wp");
+        const viewPoints = preferred.length ? preferred : points;
+        const minX = Math.min(...viewPoints.map((point) => point.x));
+        const maxX = Math.max(...viewPoints.map((point) => point.x));
+        const minY = Math.min(...viewPoints.map((point) => point.y));
+        const maxY = Math.max(...viewPoints.map((point) => point.y));
+        const spanX = Math.max(maxX - minX, 80);
+        const spanY = Math.max(maxY - minY, 80);
+        const rawMetersPerPx = Math.max(spanX / Math.max(1, plotW), spanY / Math.max(1, plotH)) * 1.12;
+        const metersPerPx = Math.min(Math.max(rawMetersPerPx, 0.35), 20);
         config.mapView = { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2, metersPerPx };
         config.defaultMapView = { ...config.mapView };
       }
@@ -1645,12 +1686,13 @@
           metric("Waypoints", summary.counts?.waypoints ?? 0),
         ].join("");
 
-        document.querySelector("#compatibility").innerHTML = `<div class="notice">
-          <strong>兼容性策略</strong>
-          <p>日志固件：${escapeHtml(manifest.compatibility?.log_firmware || "unknown")}；消息字段按日志内 DataFlash FMT 解码；模式号按 ${escapeHtml(modes.mode_map_source || "not loaded")} 映射，未知模式会显示为 <code>MODE_n</code>。解释层参考：${escapeHtml(manifest.compatibility?.explanation_source || "not loaded")}。</p>
-          <p>缺失/未生成数据：${missing.length ? escapeHtml(missing.join(", ")) : "none"}。页面会显示已加载内容，缺失图层保持空图或空表。</p>
-        </div>`;
         renderToolbar();
+        document.querySelector("#toggle-controls")?.addEventListener("click", () => {
+          const root = document.querySelector("main");
+          root.classList.toggle("controls-collapsed");
+          document.querySelector("#toggle-controls").textContent = root.classList.contains("controls-collapsed") ? "Show" : "Hide";
+          renderAllCharts();
+        });
 
         const modeRows = (modes.segments || []).map((segment) => ({
           time_s: segment.mode_time_s,

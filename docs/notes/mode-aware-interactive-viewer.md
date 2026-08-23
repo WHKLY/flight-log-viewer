@@ -18,13 +18,14 @@ Date: 2026-08-23
 - Touch interaction is supported: one-finger drag pans, two-finger pinch zooms time/Y on time-series charts and map scale on the track chart.
 - User-defined horizontal Y reference lines are created or moved by clicking/dragging on the left Y-axis edge of a time-series chart.
 - User-defined vertical time reference lines are created or moved by clicking/dragging on the bottom time-axis edge and appear on every time-series chart.
-- Global controls, metrics, compatibility status, mode focus, and reference-line controls live in a left-side vertically scrollable control panel.
+- Global controls, metrics, mode focus, and reference-line clearing controls live in a narrower left-side vertically scrollable control panel with a hide/show strip.
+- Compatibility details are no longer shown as a long default panel; missing-data behavior remains implemented in loading fallbacks.
 - Chart layers live in the right-side viewer panel and start collapsed by default to keep the first screen manageable on a tablet.
 - Layers can be collapsed to keep the dashboard usable on a tablet screen.
 - The waypoint table is shown as a full scrollable table instead of being truncated to the first ten rows; waypoint command buttons highlight the selected waypoint on the track chart.
 - The track panel is filtered by the same time window so mode focus changes the visible flight-path segment.
 - `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale; pan is handled by direct drag rather than extra buttons.
-- The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent drag pan, map zoom, and `Reset map`.
+- The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent drag pan, map zoom, and `Reset map` with a clamped default map scale.
 - A custom data layer lets the user choose any loaded message and numeric field, then append it as a curve on a shared-time custom chart.
 - Missing generated JSON files no longer block the whole viewer; absent groups fall back to empty data and the compatibility panel lists what is missing.
 - `extract_dataflash_series.py` writes empty series and manifest output when no `.BIN` file is present, so waypoint-only or parameter-only packages can still be opened after `summarize_dataset.py` runs.
