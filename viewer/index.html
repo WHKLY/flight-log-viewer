@@ -7,98 +7,229 @@
     <style>
       :root {
         color-scheme: light;
-        --ink: #16201b;
-        --muted: #627069;
-        --line: #d6ddd7;
-        --paper: #f8faf6;
+        --ink: #17211d;
+        --muted: #607068;
+        --soft: #eef2ec;
+        --paper: #f7f8f2;
         --panel: #ffffff;
-        --accent: #126a57;
-        --warn: #b05a22;
+        --line: #d7ded6;
+        --green: #0f6a55;
+        --blue: #246b93;
+        --red: #a13d31;
+        --gold: #9a6b16;
+        --violet: #67509a;
+      }
+
+      * {
+        box-sizing: border-box;
       }
 
       body {
         margin: 0;
         background:
-          linear-gradient(135deg, rgba(18, 106, 87, 0.12), transparent 34%),
-          linear-gradient(315deg, rgba(176, 90, 34, 0.12), transparent 40%),
+          radial-gradient(circle at 10% 0%, rgba(15, 106, 85, 0.12), transparent 28%),
+          linear-gradient(120deg, rgba(36, 107, 147, 0.1), transparent 36%),
+          linear-gradient(315deg, rgba(154, 107, 22, 0.12), transparent 40%),
           var(--paper);
         color: var(--ink);
-        font-family: "Avenir Next", "Gill Sans", sans-serif;
+        font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
       }
 
       main {
-        max-width: 1120px;
+        max-width: 1240px;
         margin: 0 auto;
-        padding: 32px 18px 48px;
+        padding: 28px 16px 48px;
       }
 
       header {
         display: grid;
+        grid-template-columns: 1fr;
         gap: 8px;
-        margin-bottom: 24px;
+        margin-bottom: 18px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
       }
 
       h1 {
-        margin: 0;
         font-size: 34px;
         letter-spacing: 0;
       }
 
-      p {
-        margin: 0;
+      h2 {
+        font-size: 20px;
+      }
+
+      h3 {
+        font-size: 15px;
+      }
+
+      p,
+      td,
+      th,
+      li {
         color: var(--muted);
       }
 
-      .grid {
+      code {
+        background: var(--soft);
+        border-radius: 4px;
+        padding: 2px 5px;
+      }
+
+      .metrics {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 12px;
-      }
-
-      section,
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 16px;
-      }
-
-      section {
-        margin-top: 14px;
-      }
-
-      h2 {
-        margin: 0 0 12px;
-        font-size: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin: 18px 0;
       }
 
       .metric {
-        font-size: 30px;
-        font-weight: 700;
-        color: var(--accent);
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
       }
 
-      code {
-        background: #eef3ee;
-        border-radius: 4px;
-        padding: 2px 5px;
+      .metric strong {
+        display: block;
+        color: var(--green);
+        font-size: 26px;
+      }
+
+      .layer {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-top: 14px;
+        overflow: hidden;
+      }
+
+      .layer-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(90deg, rgba(15, 106, 85, 0.09), rgba(255, 255, 255, 0));
+      }
+
+      .layer-head p {
+        max-width: 780px;
+      }
+
+      .layer-index {
+        flex: 0 0 auto;
+        color: var(--green);
+        font-weight: 700;
+      }
+
+      .layer-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .panel {
+        min-width: 0;
+      }
+
+      .panel + .panel {
+        border-left: 1px solid var(--line);
+        padding-left: 14px;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 260px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfcf8;
+      }
+
+      .small canvas {
+        height: 210px;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 8px;
+        font-size: 13px;
+      }
+
+      .legend span::before {
+        content: "";
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        margin-right: 6px;
+        border-radius: 2px;
+        background: var(--swatch);
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 14px;
+        font-size: 13px;
       }
 
       th,
       td {
         border-bottom: 1px solid var(--line);
-        padding: 8px 6px;
+        padding: 7px 4px;
         text-align: left;
+        vertical-align: top;
       }
 
-      .empty {
-        color: var(--warn);
+      th {
+        color: var(--ink);
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .note {
+        background: var(--soft);
+        border-radius: 8px;
+        padding: 10px;
+        font-size: 13px;
+      }
+
+      .error {
+        color: var(--red);
+        background: #fff4f0;
+        border: 1px solid #e6beb5;
+        border-radius: 8px;
+        padding: 12px;
+      }
+
+      @media (max-width: 860px) {
+        .layer-head,
+        .layer-body {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .panel + .panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding-left: 0;
+          padding-top: 14px;
+        }
+
+        canvas {
+          height: 220px;
+        }
       }
     </style>
   </head>
@@ -106,80 +237,391 @@
     <main>
       <header>
         <h1>Flight Log Viewer</h1>
-        <p>ArduPilot Plane log package summary. Run <code>python3 scripts/summarize_dataset.py</code> first.</p>
+        <p>按 ArduPlane 控制层级组织：任务/事件、航迹、L1、TECS、姿态/角速度、执行输出。</p>
       </header>
 
-      <div class="grid" id="metrics"></div>
-
-      <section>
-        <h2>Selected Files</h2>
-        <div id="selected-files"></div>
-      </section>
-
-      <section>
-        <h2>Control Parameters</h2>
-        <div id="params"></div>
-      </section>
-
-      <section>
-        <h2>Mission Waypoints</h2>
-        <div id="waypoints"></div>
-      </section>
+      <div class="metrics" id="metrics"></div>
+      <div id="app"></div>
     </main>
 
     <script>
-      async function loadSummary() {
-        const response = await fetch("../public-data/dataset-summary.json");
-        if (!response.ok) throw new Error("dataset-summary.json not found");
+      const colors = {
+        green: "#0f6a55",
+        blue: "#246b93",
+        red: "#a13d31",
+        gold: "#9a6b16",
+        violet: "#67509a",
+        gray: "#7b8780",
+      };
+
+      const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+
+      async function loadJson(path) {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error(`${path} not found`);
         return response.json();
       }
 
       function metric(label, value) {
-        return `<div class="card"><p>${label}</p><div class="metric">${value}</div></div>`;
+        return `<div class="metric"><p>${label}</p><strong>${value}</strong></div>`;
       }
 
-      function table(rows, columns) {
-        if (!rows.length) return '<p class="empty">No data.</p>';
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;");
+      }
+
+      function table(rows, columns, limit = 12) {
+        const visible = rows.slice(0, limit);
+        if (!visible.length) return `<p>No data.</p>`;
         const head = columns.map((column) => `<th>${column.label}</th>`).join("");
-        const body = rows
-          .map((row) => `<tr>${columns.map((column) => `<td>${row[column.key] ?? ""}</td>`).join("")}</tr>`)
+        const body = visible
+          .map(
+            (row) =>
+              `<tr>${columns
+                .map((column) => `<td>${escapeHtml(column.format ? column.format(row[column.key], row) : (row[column.key] ?? ""))}</td>`)
+                .join("")}</tr>`,
+          )
           .join("");
         return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
       }
 
-      loadSummary()
-        .then((summary) => {
-          document.querySelector("#metrics").innerHTML = [
-            metric("Files", summary.counts.files),
-            metric("Parameters", summary.counts.parameters),
-            metric("Control Params", summary.counts.control_parameters),
-            metric("Waypoints", summary.counts.waypoints),
-          ].join("");
+      function layer(index, title, description, chartHtml, sideHtml) {
+        return `<section class="layer">
+          <div class="layer-head">
+            <div><h2>${title}</h2><p>${description}</p></div>
+            <div class="layer-index">Layer ${index}</div>
+          </div>
+          <div class="layer-body">
+            <div class="panel">${chartHtml}</div>
+            <div class="panel stack">${sideHtml}</div>
+          </div>
+        </section>`;
+      }
 
-          document.querySelector("#selected-files").innerHTML = `<pre>${JSON.stringify(
-            summary.selected_files,
-            null,
-            2,
-          )}</pre>`;
+      function valueRange(seriesList) {
+        let minX = Infinity;
+        let maxX = -Infinity;
+        let minY = Infinity;
+        let maxY = -Infinity;
+        for (const series of seriesList) {
+          for (const point of series.points) {
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+            minX = Math.min(minX, point.x);
+            maxX = Math.max(maxX, point.x);
+            minY = Math.min(minY, point.y);
+            maxY = Math.max(maxY, point.y);
+          }
+        }
+        if (!Number.isFinite(minX) || minX === maxX) {
+          minX = 0;
+          maxX = 1;
+        }
+        if (!Number.isFinite(minY) || minY === maxY) {
+          minY = 0;
+          maxY = 1;
+        }
+        const padY = (maxY - minY) * 0.08 || 1;
+        return { minX, maxX, minY: minY - padY, maxY: maxY + padY };
+      }
 
-          const params = Object.entries(summary.control_params).map(([name, value]) => ({ name, value }));
-          document.querySelector("#params").innerHTML = table(params, [
-            { key: "name", label: "Parameter" },
-            { key: "value", label: "Value" },
-          ]);
+      function downsample(points, max = 900) {
+        if (points.length <= max) return points;
+        const step = Math.ceil(points.length / max);
+        return points.filter((_, index) => index % step === 0);
+      }
 
-          document.querySelector("#waypoints").innerHTML = table(summary.waypoints, [
-            { key: "index", label: "#" },
-            { key: "command_name", label: "Command" },
-            { key: "lat", label: "Lat" },
-            { key: "lon", label: "Lon" },
-            { key: "alt", label: "Alt" },
-          ]);
-        })
-        .catch((error) => {
-          document.querySelector("#metrics").innerHTML = `<p class="empty">${error.message}</p>`;
+      function drawLineChart(canvas, seriesList, options = {}) {
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        ctx.scale(dpr, dpr);
+
+        const width = rect.width;
+        const height = rect.height;
+        const pad = { left: 48, right: 14, top: 18, bottom: 30 };
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        const range = valueRange(seriesList);
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = "#d7ded6";
+        ctx.lineWidth = 1;
+        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.fillStyle = "#607068";
+
+        for (let i = 0; i <= 4; i++) {
+          const y = pad.top + (plotH * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(width - pad.right, y);
+          ctx.stroke();
+          const label = range.maxY - ((range.maxY - range.minY) * i) / 4;
+          ctx.fillText(fmt.format(label), 6, y + 4);
+        }
+
+        ctx.fillText(options.xLabel || "time_s", pad.left, height - 8);
+        if (options.yLabel) ctx.fillText(options.yLabel, 6, 12);
+
+        const xScale = (x) => pad.left + ((x - range.minX) / (range.maxX - range.minX)) * plotW;
+        const yScale = (y) => pad.top + (1 - (y - range.minY) / (range.maxY - range.minY)) * plotH;
+
+        for (const series of seriesList) {
+          const points = downsample(series.points);
+          ctx.strokeStyle = series.color;
+          ctx.lineWidth = series.width || 1.8;
+          ctx.beginPath();
+          let started = false;
+          for (const point of points) {
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+            const x = xScale(point.x);
+            const y = yScale(point.y);
+            if (!started) {
+              ctx.moveTo(x, y);
+              started = true;
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
+      }
+
+      function drawTrack(canvas, posRows, waypointRows) {
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        ctx.scale(dpr, dpr);
+        const width = rect.width;
+        const height = rect.height;
+        const pad = 22;
+        const all = [
+          ...posRows.map((row) => ({ lat: row.Lat, lon: row.Lng })),
+          ...waypointRows.filter((row) => row.lat && row.lon).map((row) => ({ lat: row.lat, lon: row.lon })),
+        ];
+        const minLat = Math.min(...all.map((p) => p.lat));
+        const maxLat = Math.max(...all.map((p) => p.lat));
+        const minLon = Math.min(...all.map((p) => p.lon));
+        const maxLon = Math.max(...all.map((p) => p.lon));
+        const scaleX = (lon) => pad + ((lon - minLon) / (maxLon - minLon || 1)) * (width - pad * 2);
+        const scaleY = (lat) => height - pad - ((lat - minLat) / (maxLat - minLat || 1)) * (height - pad * 2);
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = "#d7ded6";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const x = pad + ((width - pad * 2) * i) / 4;
+          const y = pad + ((height - pad * 2) * i) / 4;
+          ctx.beginPath();
+          ctx.moveTo(x, pad);
+          ctx.lineTo(x, height - pad);
+          ctx.moveTo(pad, y);
+          ctx.lineTo(width - pad, y);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = colors.gold;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        waypointRows.forEach((row, index) => {
+          if (!row.lat || !row.lon) return;
+          const x = scaleX(row.lon);
+          const y = scaleY(row.lat);
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
         });
+        ctx.stroke();
+
+        ctx.strokeStyle = colors.green;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        downsample(posRows.map((row) => ({ x: scaleX(row.Lng), y: scaleY(row.Lat) }))).forEach((point, index) => {
+          if (index === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.stroke();
+
+        ctx.fillStyle = colors.gold;
+        waypointRows.forEach((row) => {
+          if (!row.lat || !row.lon) return;
+          ctx.beginPath();
+          ctx.arc(scaleX(row.lon), scaleY(row.lat), 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function series(rows, yKey, color, label, xKey = "time_s") {
+        return {
+          label,
+          color,
+          points: rows.map((row) => ({ x: row[xKey], y: row[yKey] })),
+        };
+      }
+
+      function legend(items) {
+        return `<div class="legend">${items
+          .map((item) => `<span style="--swatch:${item.color}">${item.label}</span>`)
+          .join("")}</div>`;
+      }
+
+      function stats(rows, key) {
+        const values = rows.map((row) => row[key]).filter(Number.isFinite);
+        if (!values.length) return "n/a";
+        return `${fmt.format(Math.min(...values))}..${fmt.format(Math.max(...values))}`;
+      }
+
+      async function main() {
+        const [summary, manifest, track, attitude, navigation, tecs, pid, io, events] = await Promise.all([
+          loadJson("../public-data/dataset-summary.json"),
+          loadJson("../public-data/series/manifest.json"),
+          loadJson("../public-data/series/track.json"),
+          loadJson("../public-data/series/attitude.json"),
+          loadJson("../public-data/series/navigation.json"),
+          loadJson("../public-data/series/tecs.json"),
+          loadJson("../public-data/series/pid.json"),
+          loadJson("../public-data/series/io.json"),
+          loadJson("../public-data/series/events.json"),
+        ]);
+
+        document.querySelector("#metrics").innerHTML = [
+          metric("DataFlash", manifest.source.source_file),
+          metric("Records", Object.values(manifest.source.target_counts).reduce((a, b) => a + b, 0)),
+          metric("Params", summary.counts.parameters),
+          metric("Waypoints", summary.counts.waypoints),
+        ].join("");
+
+        const app = document.querySelector("#app");
+        app.innerHTML = [
+          layer(
+            0,
+            "Mission / Events",
+            "任务层负责模式、航点和事件标注；这里不解释舵面，只给后续控制层分段。",
+            `<div class="small"><canvas id="alt-chart"></canvas></div>${legend([
+              { label: "RelHomeAlt", color: colors.green },
+              { label: "Waypoint Alt", color: colors.gold },
+            ])}`,
+            `<h3>Mode changes</h3>${table(events.messages.MODE, [
+              { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
+              { key: "Mode", label: "Mode" },
+              { key: "ModeNum", label: "Num" },
+              { key: "Rsn", label: "Reason" },
+            ])}<h3>Recent messages</h3>${table(events.messages.MSG.slice(-8), [
+              { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
+              { key: "Message", label: "Message" },
+            ], 8)}`,
+          ),
+          layer(
+            1,
+            "Track / Geometry",
+            "航迹层只展示实际路径和航点几何；它不是控制器，但为 L1 横向制导提供误差来源。",
+            `<canvas id="track-chart"></canvas>${legend([
+              { label: "POS track", color: colors.green },
+              { label: "Mission waypoints", color: colors.gold },
+            ])}`,
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3>${table(summary.waypoints, [
+              { key: "index", label: "#" },
+              { key: "command_name", label: "Command" },
+              { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
+            ], 10)}`,
+          ),
+          layer(
+            2,
+            "L1 Navigation",
+            "L1 横向制导把航点几何和横航迹误差转为目标滚转；不要把这层的问题直接归因于 PID。",
+            `<canvas id="l1-chart"></canvas>${legend([
+              { label: "NavRoll", color: colors.blue },
+              { label: "Roll", color: colors.green },
+              { label: "XT", color: colors.red },
+            ])}`,
+            `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div><p>参数面板后续应关联 <code>NAVL1_PERIOD</code>、<code>NAVL1_DAMPING</code>、<code>NAVL1_XTRACK_I</code>。</p>`,
+          ),
+          layer(
+            3,
+            "TECS Energy",
+            "TECS 纵向能量层处理高度、速度、俯仰和油门分配；它不是普通高度 PID。",
+            `<canvas id="tecs-chart"></canvas>${legend([
+              { label: "hdem", color: colors.blue },
+              { label: "h", color: colors.green },
+              { label: "spdem", color: colors.gold },
+              { label: "sp", color: colors.red },
+            ])}`,
+            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div><p>这份日志里 TECS 是低频记录，图表解释时应提醒采样率低于 ATT/CTUN/PID。</p>`,
+          ),
+          layer(
+            4,
+            "Attitude / Rate",
+            "姿态外环把目标 Roll/Pitch 转为目标角速度，Rate PID 再转成舵面需求；Yaw 正常路径需单独判断。",
+            `<canvas id="att-chart"></canvas>${legend([
+              { label: "DesRoll", color: colors.blue },
+              { label: "Roll", color: colors.green },
+              { label: "DesPitch", color: colors.gold },
+              { label: "Pitch", color: colors.red },
+            ])}<div class="small" style="margin-top:12px"><canvas id="pid-chart"></canvas></div>${legend([
+              { label: "PIDR Err", color: colors.blue },
+              { label: "PIDP Err", color: colors.red },
+            ])}`,
+            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div><p><code>PIDY</code> 有数据不代表普通 AUTO/FBWA 一定走直接 Yaw Rate 控制，仍需结合模式和源码路径解释。</p>`,
+          ),
+          layer(
+            5,
+            "I/O Outputs",
+            "执行层展示 RC 输入和 SRV 输出；这是控制链末端，用来验证上层需求是否导致舵面/油门动作。",
+            `<canvas id="io-chart"></canvas>${legend([
+              { label: "RCOU C1", color: colors.blue },
+              { label: "RCOU C2", color: colors.green },
+              { label: "RCOU C3", color: colors.gold },
+              { label: "RCOU C4", color: colors.red },
+            ])}`,
+            `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div><p>通道语义后续应结合 <code>SERVO*_FUNCTION</code> 参数映射，而不是固定假设 C1/C2/C3/C4。</p>`,
+          ),
+        ].join("");
+
+        requestAnimationFrame(() => {
+          drawLineChart(document.querySelector("#alt-chart"), [
+            series(track.messages.POS, "RelHomeAlt", colors.green, "RelHomeAlt"),
+            { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: track.messages.POS[0].time_s + i * 8, y: w.alt })) },
+          ], { yLabel: "m" });
+          drawTrack(document.querySelector("#track-chart"), track.messages.POS, summary.waypoints);
+          drawLineChart(document.querySelector("#l1-chart"), [
+            series(navigation.messages.CTUN, "NavRoll", colors.blue, "NavRoll"),
+            series(navigation.messages.CTUN, "Roll", colors.green, "Roll"),
+            series(navigation.messages.NTUN, "XT", colors.red, "XT"),
+          ], { yLabel: "deg / m" });
+          drawLineChart(document.querySelector("#tecs-chart"), [
+            series(tecs.messages.TECS, "hdem", colors.blue, "hdem"),
+            series(tecs.messages.TECS, "h", colors.green, "h"),
+            series(tecs.messages.TECS, "spdem", colors.gold, "spdem"),
+            series(tecs.messages.TECS, "sp", colors.red, "sp"),
+          ], { yLabel: "m / mps" });
+          drawLineChart(document.querySelector("#att-chart"), [
+            series(attitude.messages.ATT, "DesRoll", colors.blue, "DesRoll"),
+            series(attitude.messages.ATT, "Roll", colors.green, "Roll"),
+            series(attitude.messages.ATT, "DesPitch", colors.gold, "DesPitch"),
+            series(attitude.messages.ATT, "Pitch", colors.red, "Pitch"),
+          ], { yLabel: "deg" });
+          drawLineChart(document.querySelector("#pid-chart"), [
+            series(pid.messages.PIDR, "Err", colors.blue, "PIDR Err"),
+            series(pid.messages.PIDP, "Err", colors.red, "PIDP Err"),
+          ], { yLabel: "deg/s" });
+          drawLineChart(document.querySelector("#io-chart"), [
+            series(io.messages.RCOU, "C1", colors.blue, "C1"),
+            series(io.messages.RCOU, "C2", colors.green, "C2"),
+            series(io.messages.RCOU, "C3", colors.gold, "C3"),
+            series(io.messages.RCOU, "C4", colors.red, "C4"),
+          ], { yLabel: "PWM" });
+        });
+      }
+
+      main().catch((error) => {
+        document.querySelector("#app").innerHTML = `<div class="error">${escapeHtml(error.message)}</div>`;
+      });
     </script>
   </body>
 </html>
-
