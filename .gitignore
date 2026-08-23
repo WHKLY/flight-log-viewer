@@ -15,6 +15,7 @@ build/
 # Local data and generated files
 data/raw/
 public-data/*.json
+public-data/series/
 docs/source-review/extracted/
 
 # Termux/editor noise

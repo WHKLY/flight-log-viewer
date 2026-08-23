@@ -28,6 +28,7 @@ viewer/                         static HTML viewer
 cd ~/work/projects/python/flight-log-viewer
 python3 scripts/summarize_dataset.py
 python3 scripts/inspect_logs.py
+python3 scripts/extract_dataflash_series.py
 ```
 
 Then open `viewer/index.html` with a local server later, or inspect:
@@ -35,5 +36,6 @@ Then open `viewer/index.html` with a local server later, or inspect:
 ```bash
 cat public-data/dataset-summary.json
 cat public-data/log-inspection.json
+ls -lh public-data/series
 ```
 
