@@ -18,6 +18,7 @@
         --red: #a13d31;
         --gold: #9a6b16;
         --violet: #67509a;
+        --shadow: 0 18px 52px rgba(23, 33, 29, 0.08);
       }
 
       * {
@@ -27,25 +28,24 @@
       body {
         margin: 0;
         background:
-          radial-gradient(circle at 10% 0%, rgba(15, 106, 85, 0.12), transparent 28%),
+          radial-gradient(circle at 8% 0%, rgba(15, 106, 85, 0.14), transparent 28%),
           linear-gradient(120deg, rgba(36, 107, 147, 0.1), transparent 36%),
-          linear-gradient(315deg, rgba(154, 107, 22, 0.12), transparent 40%),
+          linear-gradient(315deg, rgba(154, 107, 22, 0.13), transparent 40%),
           var(--paper);
         color: var(--ink);
         font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
       }
 
       main {
-        max-width: 1240px;
+        max-width: 1260px;
         margin: 0 auto;
         padding: 28px 16px 48px;
       }
 
       header {
         display: grid;
-        grid-template-columns: 1fr;
         gap: 8px;
-        margin-bottom: 18px;
+        margin-bottom: 16px;
       }
 
       h1,
@@ -56,8 +56,8 @@
       }
 
       h1 {
-        font-size: 34px;
-        letter-spacing: 0;
+        font-size: clamp(28px, 5vw, 42px);
+        letter-spacing: -0.03em;
       }
 
       h2 {
@@ -71,7 +71,8 @@
       p,
       td,
       th,
-      li {
+      li,
+      label {
         color: var(--muted);
       }
 
@@ -79,6 +80,22 @@
         background: var(--soft);
         border-radius: 4px;
         padding: 2px 5px;
+      }
+
+      button {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--ink);
+        cursor: pointer;
+        font: inherit;
+        padding: 7px 12px;
+      }
+
+      button.active {
+        background: var(--green);
+        border-color: var(--green);
+        color: #fff;
       }
 
       .metrics {
@@ -91,41 +108,84 @@
       .metric {
         background: rgba(255, 255, 255, 0.88);
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         padding: 12px;
+        box-shadow: var(--shadow);
       }
 
       .metric strong {
         display: block;
         color: var(--green);
-        font-size: 26px;
+        font-size: 24px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .notice,
+      .toolbar {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        margin-bottom: 14px;
+        padding: 12px;
+      }
+
+      .toolbar {
+        display: grid;
+        gap: 10px;
+      }
+
+      .toolbar-row,
+      .mode-buttons,
+      .chart-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .range-text {
+        color: var(--muted);
+        font-size: 13px;
       }
 
       .layer {
         background: rgba(255, 255, 255, 0.92);
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
+        box-shadow: var(--shadow);
         margin-top: 14px;
         overflow: hidden;
       }
 
       .layer-head {
-        display: flex;
-        justify-content: space-between;
+        align-items: start;
+        display: grid;
         gap: 12px;
+        grid-template-columns: 1fr auto auto;
         padding: 14px 16px;
         border-bottom: 1px solid var(--line);
         background: linear-gradient(90deg, rgba(15, 106, 85, 0.09), rgba(255, 255, 255, 0));
       }
 
       .layer-head p {
-        max-width: 780px;
+        max-width: 820px;
       }
 
       .layer-index {
-        flex: 0 0 auto;
         color: var(--green);
         font-weight: 700;
+        padding-top: 2px;
+      }
+
+      .layer-toggle {
+        padding: 5px 10px;
+      }
+
+      .layer.collapsed .layer-body {
+        display: none;
       }
 
       .layer-body {
@@ -144,17 +204,36 @@
         padding-left: 14px;
       }
 
+      .chart-shell {
+        position: relative;
+      }
+
       canvas {
         display: block;
         width: 100%;
-        height: 260px;
+        height: 282px;
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: 10px;
         background: #fbfcf8;
+        touch-action: none;
       }
 
       .small canvas {
-        height: 210px;
+        height: 220px;
+      }
+
+      .readout {
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        bottom: 8px;
+        box-shadow: 0 8px 24px rgba(23, 33, 29, 0.08);
+        color: var(--ink);
+        font-size: 12px;
+        left: 8px;
+        max-width: min(92%, 680px);
+        padding: 7px 8px;
+        position: absolute;
       }
 
       .legend {
@@ -165,14 +244,17 @@
         font-size: 13px;
       }
 
-      .legend span::before {
-        content: "";
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        margin-right: 6px;
+      .legend label {
+        align-items: center;
+        display: inline-flex;
+        gap: 5px;
+      }
+
+      .swatch {
         border-radius: 2px;
-        background: var(--swatch);
+        display: inline-block;
+        height: 10px;
+        width: 10px;
       }
 
       table {
@@ -196,6 +278,7 @@
       .stack {
         display: grid;
         gap: 10px;
+        align-content: start;
       }
 
       .note {
@@ -228,7 +311,7 @@
         }
 
         canvas {
-          height: 220px;
+          height: 230px;
         }
       }
     </style>
@@ -237,10 +320,12 @@
     <main>
       <header>
         <h1>Flight Log Viewer</h1>
-        <p>按 ArduPlane 控制层级组织：任务/事件、航迹、L1、TECS、姿态/角速度、执行输出。</p>
+        <p>按 ArduPlane 控制层级组织：Flight Mode / Mission、航迹、L1、TECS、姿态/角速度、执行输出。</p>
       </header>
 
       <div class="metrics" id="metrics"></div>
+      <div id="compatibility"></div>
+      <div id="timeline-toolbar"></div>
       <div id="app"></div>
     </main>
 
@@ -252,9 +337,21 @@
         gold: "#9a6b16",
         violet: "#67509a",
         gray: "#7b8780",
+        teal: "#12806a",
       };
 
       const fmt = new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 });
+      const state = {
+        fullRange: { start: 0, end: 1 },
+        range: { start: 0, end: 1 },
+        activeMode: "all",
+        hidden: {},
+        hover: {},
+        pinned: {},
+        dragging: null,
+      };
+      const charts = new Map();
+      let modeData = { segments: [] };
 
       async function loadJson(path) {
         const response = await fetch(path);
@@ -263,11 +360,11 @@
       }
 
       function metric(label, value) {
-        return `<div class="metric"><p>${label}</p><strong>${value}</strong></div>`;
+        return `<div class="metric"><p>${label}</p><strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong></div>`;
       }
 
       function escapeHtml(value) {
-        return String(value)
+        return String(value ?? "")
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
@@ -290,10 +387,11 @@
       }
 
       function layer(index, title, description, chartHtml, sideHtml) {
-        return `<section class="layer">
+        return `<section class="layer" data-layer="${index}">
           <div class="layer-head">
             <div><h2>${title}</h2><p>${description}</p></div>
             <div class="layer-index">Layer ${index}</div>
+            <button class="layer-toggle" data-toggle-layer="${index}">收起</button>
           </div>
           <div class="layer-body">
             <div class="panel">${chartHtml}</div>
@@ -302,39 +400,189 @@
         </section>`;
       }
 
-      function valueRange(seriesList) {
-        let minX = Infinity;
-        let maxX = -Infinity;
+      function chartPanel(id, small = false) {
+        return `<div class="chart-shell ${small ? "small" : ""}">
+          <canvas id="${id}" data-chart="${id}"></canvas>
+          <div class="readout" id="${id}-readout">滚轮缩放，拖拽平移，点击锁定读数。</div>
+        </div>
+        <div class="legend" id="${id}-legend"></div>`;
+      }
+
+      function finite(value) {
+        return Number.isFinite(value);
+      }
+
+      function series(rows, yKey, color, label, xKey = "time_s") {
+        return {
+          label,
+          color,
+          points: rows
+            .map((row) => ({ x: Number(row[xKey]), y: Number(row[yKey]), row }))
+            .filter((point) => finite(point.x) && finite(point.y)),
+        };
+      }
+
+      function stats(rows, key) {
+        const values = rows.map((row) => Number(row[key])).filter(finite);
+        if (!values.length) return "n/a";
+        return `${fmt.format(Math.min(...values))}..${fmt.format(Math.max(...values))}`;
+      }
+
+      function modeName(row) {
+        return row.name || `MODE_${row.mode_num ?? row.ModeNum ?? row.Mode}`;
+      }
+
+      function currentSegments() {
+        return modeData.segments.filter((segment) => segment.end_s >= state.range.start && segment.start_s <= state.range.end);
+      }
+
+      function setRange(start, end, source = "custom") {
+        const full = state.fullRange;
+        const minWidth = Math.max((full.end - full.start) * 0.002, 0.25);
+        let nextStart = Math.max(full.start, Number(start));
+        let nextEnd = Math.min(full.end, Number(end));
+        if (!finite(nextStart) || !finite(nextEnd) || nextEnd <= nextStart) return;
+        if (nextEnd - nextStart < minWidth) {
+          const mid = (nextStart + nextEnd) / 2;
+          nextStart = mid - minWidth / 2;
+          nextEnd = mid + minWidth / 2;
+        }
+        if (nextStart < full.start) {
+          nextEnd += full.start - nextStart;
+          nextStart = full.start;
+        }
+        if (nextEnd > full.end) {
+          nextStart -= nextEnd - full.end;
+          nextEnd = full.end;
+        }
+        state.range = { start: Math.max(full.start, nextStart), end: Math.min(full.end, nextEnd) };
+        updateRangeText(source);
+        renderAllCharts();
+      }
+
+      function focusMode(name) {
+        state.activeMode = name;
+        if (name === "all") {
+          setRange(state.fullRange.start, state.fullRange.end, "all");
+          renderModeButtons();
+          return;
+        }
+        const segments = modeData.segments.filter((segment) => segment.name === name);
+        if (!segments.length) return;
+        const start = Math.min(...segments.map((segment) => segment.start_s));
+        const end = Math.max(...segments.map((segment) => segment.end_s));
+        setRange(start, end, name);
+        renderModeButtons();
+      }
+
+      function updateRangeText(source) {
+        const node = document.querySelector("#range-text");
+        if (!node) return;
+        const modes = [...new Set(currentSegments().map((segment) => segment.name))].join(" / ") || "n/a";
+        node.textContent = `${source}: ${fmt.format(state.range.start)}s .. ${fmt.format(state.range.end)}s | modes: ${modes}`;
+      }
+
+      function renderModeButtons() {
+        const holder = document.querySelector("#mode-buttons");
+        if (!holder) return;
+        const names = ["all", ...new Set(modeData.segments.map((segment) => segment.name))];
+        holder.innerHTML = names
+          .map((name) => `<button class="${state.activeMode === name ? "active" : ""}" data-mode="${name}">${name === "all" ? "Whole Flight" : name}</button>`)
+          .join("");
+        holder.querySelectorAll("button").forEach((button) => {
+          button.addEventListener("click", () => focusMode(button.dataset.mode));
+        });
+      }
+
+      function renderToolbar() {
+        document.querySelector("#timeline-toolbar").innerHTML = `<div class="toolbar">
+          <div class="toolbar-row"><strong>Time / Flight Mode 横轴</strong><span class="range-text" id="range-text"></span></div>
+          <div class="mode-buttons" id="mode-buttons"></div>
+          <div class="chart-actions">
+            <button id="zoom-out">Zoom out</button>
+            <button id="clear-pins">Clear readouts</button>
+          </div>
+        </div>`;
+        renderModeButtons();
+        updateRangeText("all");
+        document.querySelector("#zoom-out").addEventListener("click", () => focusMode("all"));
+        document.querySelector("#clear-pins").addEventListener("click", () => {
+          state.pinned = {};
+          renderAllCharts();
+        });
+      }
+
+      function valueRange(seriesList, xStart, xEnd) {
         let minY = Infinity;
         let maxY = -Infinity;
-        for (const series of seriesList) {
-          for (const point of series.points) {
-            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
-            minX = Math.min(minX, point.x);
-            maxX = Math.max(maxX, point.x);
+        for (const seriesItem of seriesList) {
+          for (const point of seriesItem.points) {
+            if (point.x < xStart || point.x > xEnd || !finite(point.y)) continue;
             minY = Math.min(minY, point.y);
             maxY = Math.max(maxY, point.y);
           }
         }
-        if (!Number.isFinite(minX) || minX === maxX) {
-          minX = 0;
-          maxX = 1;
-        }
-        if (!Number.isFinite(minY) || minY === maxY) {
+        if (!finite(minY) || minY === maxY) {
           minY = 0;
           maxY = 1;
         }
         const padY = (maxY - minY) * 0.08 || 1;
-        return { minX, maxX, minY: minY - padY, maxY: maxY + padY };
+        return { minY: minY - padY, maxY: maxY + padY };
       }
 
-      function downsample(points, max = 900) {
+      function visibleSeries(config) {
+        const hidden = state.hidden[config.id] || {};
+        return config.series.filter((seriesItem) => !hidden[seriesItem.label]);
+      }
+
+      function downsample(points, max = 1100) {
         if (points.length <= max) return points;
         const step = Math.ceil(points.length / max);
         return points.filter((_, index) => index % step === 0);
       }
 
-      function drawLineChart(canvas, seriesList, options = {}) {
+      function nearestPoint(config, time) {
+        let best = null;
+        for (const seriesItem of visibleSeries(config)) {
+          let lo = 0;
+          let hi = seriesItem.points.length - 1;
+          while (lo < hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (seriesItem.points[mid].x < time) lo = mid + 1;
+            else hi = mid;
+          }
+          for (const index of [lo - 1, lo, lo + 1]) {
+            const point = seriesItem.points[index];
+            if (!point) continue;
+            const distance = Math.abs(point.x - time);
+            if (!best || distance < best.distance) best = { ...point, label: seriesItem.label, color: seriesItem.color, distance };
+          }
+        }
+        return best;
+      }
+
+      function drawModeBand(ctx, chart, pad, plotW) {
+        const y = pad.top - 18;
+        const height = 16;
+        ctx.save();
+        ctx.font = "11px Avenir Next, sans-serif";
+        for (const segment of currentSegments()) {
+          const x0 = chart.xScale(Math.max(segment.start_s, state.range.start));
+          const x1 = chart.xScale(Math.min(segment.end_s, state.range.end));
+          if (x1 <= pad.left || x0 >= pad.left + plotW) continue;
+          ctx.fillStyle = segment.name === "AUTO" ? "rgba(15, 106, 85, 0.18)" : "rgba(36, 107, 147, 0.12)";
+          ctx.fillRect(x0, y, Math.max(2, x1 - x0), height);
+          if (x1 - x0 > 48) {
+            ctx.fillStyle = "#17211d";
+            ctx.fillText(segment.name, x0 + 4, y + 12);
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawLineChart(config) {
+        const canvas = document.querySelector(`#${config.id}`);
+        if (!canvas) return;
         const ctx = canvas.getContext("2d");
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -344,12 +592,19 @@
 
         const width = rect.width;
         const height = rect.height;
-        const pad = { left: 48, right: 14, top: 18, bottom: 30 };
+        const pad = { left: 52, right: 16, top: 38, bottom: 34 };
         const plotW = width - pad.left - pad.right;
         const plotH = height - pad.top - pad.bottom;
-        const range = valueRange(seriesList);
+        const xStart = state.range.start;
+        const xEnd = state.range.end;
+        const activeSeries = visibleSeries(config);
+        const yRange = valueRange(activeSeries, xStart, xEnd);
+        const xScale = (x) => pad.left + ((x - xStart) / (xEnd - xStart)) * plotW;
+        const yScale = (y) => pad.top + (1 - (y - yRange.minY) / (yRange.maxY - yRange.minY)) * plotH;
+        config.xScale = xScale;
 
         ctx.clearRect(0, 0, width, height);
+        drawModeBand(ctx, config, pad, plotW);
         ctx.strokeStyle = "#d7ded6";
         ctx.lineWidth = 1;
         ctx.font = "12px Avenir Next, sans-serif";
@@ -361,24 +616,34 @@
           ctx.moveTo(pad.left, y);
           ctx.lineTo(width - pad.right, y);
           ctx.stroke();
-          const label = range.maxY - ((range.maxY - range.minY) * i) / 4;
+          const label = yRange.maxY - ((yRange.maxY - yRange.minY) * i) / 4;
           ctx.fillText(fmt.format(label), 6, y + 4);
         }
 
-        ctx.fillText(options.xLabel || "time_s", pad.left, height - 8);
-        if (options.yLabel) ctx.fillText(options.yLabel, 6, 12);
+        for (let i = 0; i <= 5; i++) {
+          const x = pad.left + (plotW * i) / 5;
+          const value = xStart + ((xEnd - xStart) * i) / 5;
+          ctx.beginPath();
+          ctx.moveTo(x, pad.top);
+          ctx.lineTo(x, pad.top + plotH);
+          ctx.stroke();
+          ctx.fillText(fmt.format(value) + "s", x - 15, height - 12);
+        }
 
-        const xScale = (x) => pad.left + ((x - range.minX) / (range.maxX - range.minX)) * plotW;
-        const yScale = (y) => pad.top + (1 - (y - range.minY) / (range.maxY - range.minY)) * plotH;
+        if (config.yLabel) ctx.fillText(config.yLabel, 6, 14);
+        ctx.fillText("flight mode", pad.left, 14);
 
-        for (const series of seriesList) {
-          const points = downsample(series.points);
-          ctx.strokeStyle = series.color;
-          ctx.lineWidth = series.width || 1.8;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(pad.left, pad.top, plotW, plotH);
+        ctx.clip();
+        for (const seriesItem of activeSeries) {
+          const points = downsample(seriesItem.points.filter((point) => point.x >= xStart && point.x <= xEnd));
+          ctx.strokeStyle = seriesItem.color;
+          ctx.lineWidth = seriesItem.width || 1.8;
           ctx.beginPath();
           let started = false;
           for (const point of points) {
-            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
             const x = xScale(point.x);
             const y = yScale(point.y);
             if (!started) {
@@ -390,9 +655,39 @@
           }
           ctx.stroke();
         }
+        ctx.restore();
+
+        const marker = state.pinned[config.id] || state.hover[config.id];
+        const readout = document.querySelector(`#${config.id}-readout`);
+        if (marker) {
+          const point = nearestPoint(config, marker.time);
+          if (point) {
+            const x = xScale(point.x);
+            ctx.strokeStyle = "rgba(23, 33, 29, 0.38)";
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, pad.top + plotH);
+            ctx.stroke();
+            const items = activeSeries.map((seriesItem) => nearestPoint({ ...config, series: [seriesItem] }, point.x)).filter(Boolean);
+            for (const item of items) {
+              ctx.fillStyle = item.color;
+              ctx.beginPath();
+              ctx.arc(xScale(item.x), yScale(item.y), 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            const mode = currentSegments().find((segment) => point.x >= segment.start_s && point.x <= segment.end_s);
+            readout.innerHTML = `${state.pinned[config.id] ? "已锁定" : "悬停"}: ${fmt.format(point.x)}s | ${mode ? mode.name : "MODE?"} | ${items
+              .map((item) => `${escapeHtml(item.label)}=${fmt.format(item.y)}`)
+              .join(" | ")}`;
+          }
+        } else {
+          readout.textContent = "滚轮缩放，拖拽平移，点击锁定读数。";
+        }
       }
 
-      function drawTrack(canvas, posRows, waypointRows) {
+      function drawTrackChart(config) {
+        const canvas = document.querySelector(`#${config.id}`);
+        if (!canvas) return;
         const ctx = canvas.getContext("2d");
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
@@ -401,10 +696,11 @@
         ctx.scale(dpr, dpr);
         const width = rect.width;
         const height = rect.height;
-        const pad = 22;
+        const pad = 24;
+        const posRows = config.posRows.filter((row) => row.time_s >= state.range.start && row.time_s <= state.range.end);
         const all = [
-          ...posRows.map((row) => ({ lat: row.Lat, lon: row.Lng })),
-          ...waypointRows.filter((row) => row.lat && row.lon).map((row) => ({ lat: row.lat, lon: row.lon })),
+          ...config.posRows.map((row) => ({ lat: row.Lat, lon: row.Lng })),
+          ...config.waypointRows.filter((row) => row.lat && row.lon).map((row) => ({ lat: row.lat, lon: row.lon })),
         ];
         const minLat = Math.min(...all.map((p) => p.lat));
         const maxLat = Math.max(...all.map((p) => p.lat));
@@ -430,7 +726,7 @@
         ctx.strokeStyle = colors.gold;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        waypointRows.forEach((row, index) => {
+        config.waypointRows.forEach((row, index) => {
           if (!row.lat || !row.lon) return;
           const x = scaleX(row.lon);
           const y = scaleY(row.lat);
@@ -440,7 +736,7 @@
         ctx.stroke();
 
         ctx.strokeStyle = colors.green;
-        ctx.lineWidth = 2.2;
+        ctx.lineWidth = 2.3;
         ctx.beginPath();
         downsample(posRows.map((row) => ({ x: scaleX(row.Lng), y: scaleY(row.Lat) }))).forEach((point, index) => {
           if (index === 0) ctx.moveTo(point.x, point.y);
@@ -449,36 +745,104 @@
         ctx.stroke();
 
         ctx.fillStyle = colors.gold;
-        waypointRows.forEach((row) => {
+        config.waypointRows.forEach((row) => {
           if (!row.lat || !row.lon) return;
           ctx.beginPath();
           ctx.arc(scaleX(row.lon), scaleY(row.lat), 3, 0, Math.PI * 2);
           ctx.fill();
         });
+        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posRows.length}`;
       }
 
-      function series(rows, yKey, color, label, xKey = "time_s") {
-        return {
-          label,
-          color,
-          points: rows.map((row) => ({ x: row[xKey], y: row[yKey] })),
-        };
+      function renderLegend(config) {
+        const node = document.querySelector(`#${config.id}-legend`);
+        if (!node || config.type === "track") return;
+        state.hidden[config.id] ||= {};
+        node.innerHTML = config.series
+          .map(
+            (seriesItem) => `<label><input type="checkbox" data-chart-id="${config.id}" data-label="${escapeHtml(seriesItem.label)}" ${state.hidden[config.id][seriesItem.label] ? "" : "checked"}><span class="swatch" style="background:${seriesItem.color}"></span>${escapeHtml(seriesItem.label)}</label>`,
+          )
+          .join("");
+        node.querySelectorAll("input").forEach((input) => {
+          input.addEventListener("change", () => {
+            state.hidden[input.dataset.chartId][input.dataset.label] = !input.checked;
+            renderAllCharts();
+          });
+        });
       }
 
-      function legend(items) {
-        return `<div class="legend">${items
-          .map((item) => `<span style="--swatch:${item.color}">${item.label}</span>`)
-          .join("")}</div>`;
+      function renderAllCharts() {
+        for (const config of charts.values()) {
+          if (config.type === "track") drawTrackChart(config);
+          else drawLineChart(config);
+        }
       }
 
-      function stats(rows, key) {
-        const values = rows.map((row) => row[key]).filter(Number.isFinite);
-        if (!values.length) return "n/a";
-        return `${fmt.format(Math.min(...values))}..${fmt.format(Math.max(...values))}`;
+      function bindChartEvents(config) {
+        const canvas = document.querySelector(`#${config.id}`);
+        if (!canvas || config.bound) return;
+        config.bound = true;
+        canvas.addEventListener("wheel", (event) => {
+          event.preventDefault();
+          const rect = canvas.getBoundingClientRect();
+          const ratio = (event.clientX - rect.left) / rect.width;
+          const anchor = state.range.start + (state.range.end - state.range.start) * ratio;
+          const factor = event.deltaY < 0 ? 0.82 : 1.22;
+          const width = (state.range.end - state.range.start) * factor;
+          setRange(anchor - width * ratio, anchor + width * (1 - ratio), "wheel");
+        }, { passive: false });
+        canvas.addEventListener("pointerdown", (event) => {
+          canvas.setPointerCapture(event.pointerId);
+          state.dragging = { x: event.clientX, start: state.range.start, end: state.range.end };
+        });
+        canvas.addEventListener("pointermove", (event) => {
+          const rect = canvas.getBoundingClientRect();
+          const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
+          if (state.dragging) {
+            const dx = event.clientX - state.dragging.x;
+            const dt = (-dx / rect.width) * (state.dragging.end - state.dragging.start);
+            setRange(state.dragging.start + dt, state.dragging.end + dt, "pan");
+          } else if (config.type !== "track") {
+            state.hover[config.id] = { time };
+            drawLineChart(config);
+          }
+        });
+        canvas.addEventListener("pointerup", (event) => {
+          state.dragging = null;
+          canvas.releasePointerCapture(event.pointerId);
+        });
+        canvas.addEventListener("pointerleave", () => {
+          state.dragging = null;
+          if (!state.pinned[config.id]) {
+            delete state.hover[config.id];
+            renderAllCharts();
+          }
+        });
+        canvas.addEventListener("click", (event) => {
+          if (config.type === "track") return;
+          const rect = canvas.getBoundingClientRect();
+          const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
+          state.pinned[config.id] = { time };
+          drawLineChart(config);
+        });
+        canvas.addEventListener("dblclick", () => {
+          delete state.pinned[config.id];
+          renderAllCharts();
+        });
+      }
+
+      function registerCharts(configs) {
+        charts.clear();
+        for (const config of configs) {
+          charts.set(config.id, config);
+          renderLegend(config);
+          bindChartEvents(config);
+        }
+        renderAllCharts();
       }
 
       async function main() {
-        const [summary, manifest, track, attitude, navigation, tecs, pid, io, events] = await Promise.all([
+        const [summary, manifest, track, attitude, navigation, tecs, pid, io, events, modes] = await Promise.all([
           loadJson("../public-data/dataset-summary.json"),
           loadJson("../public-data/series/manifest.json"),
           loadJson("../public-data/series/track.json"),
@@ -488,31 +852,52 @@
           loadJson("../public-data/series/pid.json"),
           loadJson("../public-data/series/io.json"),
           loadJson("../public-data/series/events.json"),
+          loadJson("../public-data/series/modes.json"),
         ]);
+        modeData = modes;
+        const full = manifest.source.time_range || { start_s: track.messages.POS[0]?.time_s ?? 0, end_s: track.messages.POS.at(-1)?.time_s ?? 1 };
+        state.fullRange = { start: full.start_s, end: full.end_s };
+        state.range = { ...state.fullRange };
 
         document.querySelector("#metrics").innerHTML = [
           metric("DataFlash", manifest.source.source_file),
+          metric("Firmware", manifest.compatibility.log_firmware || "unknown"),
           metric("Records", Object.values(manifest.source.target_counts).reduce((a, b) => a + b, 0)),
+          metric("Modes", [...new Set(modes.segments.map((segment) => segment.name))].join(" / ")),
           metric("Params", summary.counts.parameters),
           metric("Waypoints", summary.counts.waypoints),
         ].join("");
+
+        document.querySelector("#compatibility").innerHTML = `<div class="notice">
+          <strong>兼容性策略</strong>
+          <p>日志固件：${escapeHtml(manifest.compatibility.log_firmware || "unknown")}；消息字段按日志内 DataFlash FMT 解码；模式号按 ${escapeHtml(modes.mode_map_source)} 映射，未知模式会显示为 <code>MODE_n</code>。解释层参考：${escapeHtml(manifest.compatibility.explanation_source)}。</p>
+        </div>`;
+        renderToolbar();
+
+        const modeRows = modes.segments.map((segment) => ({
+          time_s: segment.mode_time_s,
+          name: segment.name,
+          mode_num: segment.mode_num,
+          start_s: segment.start_s,
+          end_s: segment.end_s,
+          duration_s: segment.duration_s,
+          reason: segment.reason,
+        }));
 
         const app = document.querySelector("#app");
         app.innerHTML = [
           layer(
             0,
-            "Mission / Events",
-            "任务层负责模式、航点和事件标注；这里不解释舵面，只给后续控制层分段。",
-            `<div class="small"><canvas id="alt-chart"></canvas></div>${legend([
-              { label: "RelHomeAlt", color: colors.green },
-              { label: "Waypoint Alt", color: colors.gold },
-            ])}`,
-            `<h3>Mode changes</h3>${table(events.messages.MODE, [
-              { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
-              { key: "Mode", label: "Mode" },
-              { key: "ModeNum", label: "Num" },
-              { key: "Rsn", label: "Reason" },
-            ])}<h3>Recent messages</h3>${table(events.messages.MSG.slice(-8), [
+            "Flight Mode / Mission",
+            "模式层先决定控制权和上层目标；后续所有控制解释都必须先按模式分段，尤其关注 AUTO 段。",
+            chartPanel("alt-chart", true),
+            `<h3>Mode segments</h3>${table(modeRows, [
+              { key: "time_s", label: "change_s", format: (v) => fmt.format(v) },
+              { key: "name", label: "Mode" },
+              { key: "mode_num", label: "Num" },
+              { key: "duration_s", label: "Duration", format: (v) => fmt.format(v) },
+              { key: "reason", label: "Reason" },
+            ], 12)}<h3>Recent messages</h3>${table(events.messages.MSG.slice(-8), [
               { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
               { key: "Message", label: "Message" },
             ], 8)}`,
@@ -520,11 +905,8 @@
           layer(
             1,
             "Track / Geometry",
-            "航迹层只展示实际路径和航点几何；它不是控制器，但为 L1 横向制导提供误差来源。",
-            `<canvas id="track-chart"></canvas>${legend([
-              { label: "POS track", color: colors.green },
-              { label: "Mission waypoints", color: colors.gold },
-            ])}`,
+            "航迹层展示当前时间窗口内的实际路径和任务航点；它为 L1 横向制导提供误差来源。",
+            chartPanel("track-chart"),
             `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3>${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command" },
@@ -534,89 +916,110 @@
           layer(
             2,
             "L1 Navigation",
-            "L1 横向制导把航点几何和横航迹误差转为目标滚转；不要把这层的问题直接归因于 PID。",
-            `<canvas id="l1-chart"></canvas>${legend([
-              { label: "NavRoll", color: colors.blue },
-              { label: "Roll", color: colors.green },
-              { label: "XT", color: colors.red },
-            ])}`,
+            "L1 横向制导把航点几何和横航迹误差转为目标滚转；不要把这层问题直接归因于 Rate PID。",
+            chartPanel("l1-chart"),
             `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div><p>参数面板后续应关联 <code>NAVL1_PERIOD</code>、<code>NAVL1_DAMPING</code>、<code>NAVL1_XTRACK_I</code>。</p>`,
           ),
           layer(
             3,
             "TECS Energy",
             "TECS 纵向能量层处理高度、速度、俯仰和油门分配；它不是普通高度 PID。",
-            `<canvas id="tecs-chart"></canvas>${legend([
-              { label: "hdem", color: colors.blue },
-              { label: "h", color: colors.green },
-              { label: "spdem", color: colors.gold },
-              { label: "sp", color: colors.red },
-            ])}`,
-            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div><p>这份日志里 TECS 是低频记录，图表解释时应提醒采样率低于 ATT/CTUN/PID。</p>`,
+            chartPanel("tecs-chart"),
+            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div><p>这份日志里 TECS 是低频记录，缩放分析时要注意采样率低于 ATT/CTUN/PID。</p>`,
           ),
           layer(
             4,
             "Attitude / Rate",
-            "姿态外环把目标 Roll/Pitch 转为目标角速度，Rate PID 再转成舵面需求；Yaw 正常路径需单独判断。",
-            `<canvas id="att-chart"></canvas>${legend([
-              { label: "DesRoll", color: colors.blue },
-              { label: "Roll", color: colors.green },
-              { label: "DesPitch", color: colors.gold },
-              { label: "Pitch", color: colors.red },
-            ])}<div class="small" style="margin-top:12px"><canvas id="pid-chart"></canvas></div>${legend([
-              { label: "PIDR Err", color: colors.blue },
-              { label: "PIDP Err", color: colors.red },
-            ])}`,
-            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div><p><code>PIDY</code> 有数据不代表普通 AUTO/FBWA 一定走直接 Yaw Rate 控制，仍需结合模式和源码路径解释。</p>`,
+            "姿态外环把目标 Roll/Pitch 转为目标角速度，Rate PID 再转成舵面需求；Yaw 路径需结合模式和源码单独判断。",
+            `${chartPanel("att-chart")}<div style="height:12px"></div>${chartPanel("pid-chart", true)}`,
+            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div><p><code>PIDY</code> 有数据不代表普通 AUTO/STABILIZE 一定走直接 Yaw Rate 控制，仍需结合模式和源码路径解释。</p>`,
           ),
           layer(
             5,
             "I/O Outputs",
             "执行层展示 RC 输入和 SRV 输出；这是控制链末端，用来验证上层需求是否导致舵面/油门动作。",
-            `<canvas id="io-chart"></canvas>${legend([
-              { label: "RCOU C1", color: colors.blue },
-              { label: "RCOU C2", color: colors.green },
-              { label: "RCOU C3", color: colors.gold },
-              { label: "RCOU C4", color: colors.red },
-            ])}`,
+            chartPanel("io-chart"),
             `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div><p>通道语义后续应结合 <code>SERVO*_FUNCTION</code> 参数映射，而不是固定假设 C1/C2/C3/C4。</p>`,
           ),
         ].join("");
 
-        requestAnimationFrame(() => {
-          drawLineChart(document.querySelector("#alt-chart"), [
-            series(track.messages.POS, "RelHomeAlt", colors.green, "RelHomeAlt"),
-            { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: track.messages.POS[0].time_s + i * 8, y: w.alt })) },
-          ], { yLabel: "m" });
-          drawTrack(document.querySelector("#track-chart"), track.messages.POS, summary.waypoints);
-          drawLineChart(document.querySelector("#l1-chart"), [
-            series(navigation.messages.CTUN, "NavRoll", colors.blue, "NavRoll"),
-            series(navigation.messages.CTUN, "Roll", colors.green, "Roll"),
-            series(navigation.messages.NTUN, "XT", colors.red, "XT"),
-          ], { yLabel: "deg / m" });
-          drawLineChart(document.querySelector("#tecs-chart"), [
-            series(tecs.messages.TECS, "hdem", colors.blue, "hdem"),
-            series(tecs.messages.TECS, "h", colors.green, "h"),
-            series(tecs.messages.TECS, "spdem", colors.gold, "spdem"),
-            series(tecs.messages.TECS, "sp", colors.red, "sp"),
-          ], { yLabel: "m / mps" });
-          drawLineChart(document.querySelector("#att-chart"), [
-            series(attitude.messages.ATT, "DesRoll", colors.blue, "DesRoll"),
-            series(attitude.messages.ATT, "Roll", colors.green, "Roll"),
-            series(attitude.messages.ATT, "DesPitch", colors.gold, "DesPitch"),
-            series(attitude.messages.ATT, "Pitch", colors.red, "Pitch"),
-          ], { yLabel: "deg" });
-          drawLineChart(document.querySelector("#pid-chart"), [
-            series(pid.messages.PIDR, "Err", colors.blue, "PIDR Err"),
-            series(pid.messages.PIDP, "Err", colors.red, "PIDP Err"),
-          ], { yLabel: "deg/s" });
-          drawLineChart(document.querySelector("#io-chart"), [
-            series(io.messages.RCOU, "C1", colors.blue, "C1"),
-            series(io.messages.RCOU, "C2", colors.green, "C2"),
-            series(io.messages.RCOU, "C3", colors.gold, "C3"),
-            series(io.messages.RCOU, "C4", colors.red, "C4"),
-          ], { yLabel: "PWM" });
+        document.querySelectorAll("[data-toggle-layer]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const section = document.querySelector(`[data-layer="${button.dataset.toggleLayer}"]`);
+            section.classList.toggle("collapsed");
+            button.textContent = section.classList.contains("collapsed") ? "展开" : "收起";
+          });
         });
+
+        registerCharts([
+          {
+            id: "alt-chart",
+            type: "line",
+            yLabel: "m",
+            series: [
+              series(track.messages.POS, "RelHomeAlt", colors.green, "RelHomeAlt"),
+              { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: state.fullRange.start + i * 8, y: Number(w.alt), row: w })) },
+            ],
+          },
+          { id: "track-chart", type: "track", posRows: track.messages.POS, waypointRows: summary.waypoints },
+          {
+            id: "l1-chart",
+            type: "line",
+            yLabel: "deg / m",
+            series: [
+              series(navigation.messages.CTUN, "NavRoll", colors.blue, "NavRoll"),
+              series(navigation.messages.CTUN, "Roll", colors.green, "Roll"),
+              series(navigation.messages.NTUN, "XT", colors.red, "XT"),
+              series(navigation.messages.NTUN, "Dist", colors.violet, "Dist"),
+            ],
+          },
+          {
+            id: "tecs-chart",
+            type: "line",
+            yLabel: "m / mps",
+            series: [
+              series(tecs.messages.TECS, "hdem", colors.blue, "hdem"),
+              series(tecs.messages.TECS, "h", colors.green, "h"),
+              series(tecs.messages.TECS, "spdem", colors.gold, "spdem"),
+              series(tecs.messages.TECS, "sp", colors.red, "sp"),
+              series(tecs.messages.ARSP, "Airspeed", colors.violet, "ARSP"),
+            ],
+          },
+          {
+            id: "att-chart",
+            type: "line",
+            yLabel: "deg",
+            series: [
+              series(attitude.messages.ATT, "DesRoll", colors.blue, "DesRoll"),
+              series(attitude.messages.ATT, "Roll", colors.green, "Roll"),
+              series(attitude.messages.ATT, "DesPitch", colors.gold, "DesPitch"),
+              series(attitude.messages.ATT, "Pitch", colors.red, "Pitch"),
+            ],
+          },
+          {
+            id: "pid-chart",
+            type: "line",
+            yLabel: "rate err",
+            series: [
+              series(pid.messages.PIDR, "Err", colors.blue, "PIDR Err"),
+              series(pid.messages.PIDP, "Err", colors.red, "PIDP Err"),
+              series(pid.messages.PIDY, "Err", colors.violet, "PIDY Err"),
+            ],
+          },
+          {
+            id: "io-chart",
+            type: "line",
+            yLabel: "PWM",
+            series: [
+              series(io.messages.RCOU, "C1", colors.blue, "RCOU C1"),
+              series(io.messages.RCOU, "C2", colors.green, "RCOU C2"),
+              series(io.messages.RCOU, "C3", colors.gold, "RCOU C3"),
+              series(io.messages.RCOU, "C4", colors.red, "RCOU C4"),
+              series(io.messages.RCIN, "C1", colors.gray, "RCIN C1"),
+            ],
+          },
+        ]);
+        window.addEventListener("resize", renderAllCharts);
       }
 
       main().catch((error) => {

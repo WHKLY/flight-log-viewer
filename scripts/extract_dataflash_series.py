@@ -45,7 +45,40 @@ SERIES_GROUPS = {
     "pid": ["PIDR", "PIDP", "PIDY"],
     "io": ["RCOU", "RCIN"],
     "events": ["MODE", "MSG"],
+    "modes": ["MODE", "MSG"],
 }
+
+PLANE_MODE_MAP = {
+    0: "MANUAL",
+    1: "CIRCLE",
+    2: "STABILIZE",
+    3: "TRAINING",
+    4: "ACRO",
+    5: "FBWA",
+    6: "FBWB",
+    7: "CRUISE",
+    8: "AUTOTUNE",
+    10: "AUTO",
+    11: "RTL",
+    12: "LOITER",
+    13: "TAKEOFF",
+    14: "AVOID_ADSB",
+    15: "GUIDED",
+    16: "INITIALISING",
+    17: "QSTABILIZE",
+    18: "QHOVER",
+    19: "QLOITER",
+    20: "QLAND",
+    21: "QRTL",
+    22: "QAUTOTUNE",
+    23: "QACRO",
+    24: "THERMAL",
+    25: "LOITER_ALT_QLAND",
+    26: "AUTOLAND",
+}
+
+MODE_MAP_SOURCE = "Plane default mode map"
+EXPLANATION_SOURCE = "Plane 4.7 docs plus local source master 381357f8"
 
 # DataFlash FMT codes used by the selected Plane logs. Scales follow ArduPilot's
 # conventional encoded units: L is latitude/longitude, c/C/e/E are centi-units.
@@ -225,6 +258,104 @@ def extract_dataflash(path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict
     return rows, metadata
 
 
+
+def time_range_from_rows(rows: dict[str, list[dict[str, Any]]]) -> dict[str, float | None]:
+    primary_messages = {
+        "POS",
+        "GPS",
+        "ATT",
+        "AHR2",
+        "XKQ",
+        "CTUN",
+        "NTUN",
+        "TECS",
+        "TEC2",
+        "PIDR",
+        "PIDP",
+        "PIDY",
+        "RCOU",
+        "RCIN",
+        "ARSP",
+    }
+    values = [
+        row["time_s"]
+        for message_name, message_rows in rows.items()
+        if message_name in primary_messages
+        for row in message_rows
+        if isinstance(row.get("time_s"), int | float)
+    ]
+    if not values:
+        values = [
+            row["time_s"]
+            for message_rows in rows.values()
+            for row in message_rows
+            if isinstance(row.get("time_s"), int | float)
+        ]
+    if not values:
+        return {"start_s": None, "end_s": None}
+    return {"start_s": min(values), "end_s": max(values)}
+
+
+def mode_name(mode_num: int) -> str:
+    return PLANE_MODE_MAP.get(mode_num, f"MODE_{mode_num}")
+
+
+def extract_firmware(messages: list[dict[str, Any]]) -> str | None:
+    for row in messages:
+        message = str(row.get("Message", ""))
+        if "ArduPlane" in message or "ArduCopter" in message or "ArduRover" in message:
+            return message
+    return None
+
+
+def build_mode_segments(
+    mode_rows: list[dict[str, Any]],
+    start_s: float | None,
+    end_s: float | None,
+) -> dict[str, Any]:
+    sorted_modes = sorted(mode_rows, key=lambda row: row.get("time_s", 0))
+    if start_s is None or end_s is None or not sorted_modes:
+        return {
+            "mode_map_source": MODE_MAP_SOURCE,
+            "mode_map": PLANE_MODE_MAP,
+            "segments": [],
+            "focus_ranges": {},
+        }
+
+    segments: list[dict[str, Any]] = []
+    for index, row in enumerate(sorted_modes):
+        mode_num = int(row.get("ModeNum", row.get("Mode", -1)))
+        segment_start = start_s if index == 0 else float(row["time_s"])
+        segment_end = float(sorted_modes[index + 1]["time_s"]) if index + 1 < len(sorted_modes) else end_s
+        name = mode_name(mode_num)
+        segments.append(
+            {
+                "start_s": segment_start,
+                "end_s": segment_end,
+                "mode_time_s": row.get("time_s"),
+                "duration_s": max(0.0, segment_end - segment_start),
+                "mode": row.get("Mode"),
+                "mode_num": mode_num,
+                "name": name,
+                "reason": row.get("Rsn"),
+                "known": mode_num in PLANE_MODE_MAP,
+            }
+        )
+
+    focus_ranges: dict[str, list[dict[str, float]]] = {}
+    for segment in segments:
+        focus_ranges.setdefault(segment["name"], []).append(
+            {"start_s": segment["start_s"], "end_s": segment["end_s"]}
+        )
+
+    return {
+        "mode_map_source": MODE_MAP_SOURCE,
+        "mode_map": PLANE_MODE_MAP,
+        "segments": segments,
+        "focus_ranges": focus_ranges,
+    }
+
+
 def write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
@@ -246,15 +377,33 @@ def main() -> int:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    time_range = time_range_from_rows(rows)
+    mode_payload = build_mode_segments(rows.get("MODE", []), time_range["start_s"], time_range["end_s"])
+    firmware = extract_firmware(rows.get("MSG", []))
+    compatibility = {
+        "log_firmware": firmware,
+        "parser_schema": "DataFlash FMT from log",
+        "mode_map_source": MODE_MAP_SOURCE,
+        "explanation_source": EXPLANATION_SOURCE,
+        "notes": [
+            "Log firmware, provided docs, and local source checkout may differ.",
+            "Message schemas are decoded from this log's FMT records.",
+        ],
+    }
+
     manifest = {
-        "source": metadata,
+        "source": {**metadata, "time_range": time_range},
+        "compatibility": compatibility,
         "groups": {},
     }
     for group_name, message_names in SERIES_GROUPS.items():
-        group_payload = {
-            "source_file": bin_file.name,
-            "messages": {name: rows.get(name, []) for name in message_names},
-        }
+        if group_name == "modes":
+            group_payload = {"source_file": bin_file.name, "compatibility": compatibility, **mode_payload}
+        else:
+            group_payload = {
+                "source_file": bin_file.name,
+                "messages": {name: rows.get(name, []) for name in message_names},
+            }
         relative_path = f"series/{group_name}.json"
         write_json(output_dir / f"{group_name}.json", group_payload)
         manifest["groups"][group_name] = {
