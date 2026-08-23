@@ -13,6 +13,9 @@ Date: 2026-08-23
 - Each time-series chart supports shared-time mouse wheel zoom, shared-time drag pan, checkbox-based curve visibility, hover readout, click-to-lock readout, and double-click unlock.
 - Time-series vertical scale is chart-local state. Shared time-axis zoom/pan filters the visible samples but does not automatically rescale the Y axis.
 - Dragging inside a time-series chart pans both axes: horizontal movement changes the shared time window, and vertical movement changes that chart's local Y-axis window.
+- Time-series charts draw a zero-axis line when `y = 0` is inside the current Y-axis window.
+- Mode transition times are drawn as vertical guide lines across every time-series chart.
+- Touch interaction is supported: one-finger drag pans, two-finger pinch zooms time/Y on time-series charts and map scale on the track chart.
 - Layers can be collapsed to keep the dashboard usable on a tablet screen.
 - The track panel is filtered by the same time window so mode focus changes the visible flight-path segment.
 - `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale; pan is handled by direct drag rather than extra buttons.
@@ -39,5 +42,3 @@ When they differ, data parsing should trust the log's own `FMT` schema first. Co
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
-
-A later UI refinement should add explicit touch gestures for Y-axis scaling on tablets, because `Shift + wheel` is convenient on desktop but not ideal for touch-only use.

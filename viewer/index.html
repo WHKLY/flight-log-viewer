@@ -25,6 +25,8 @@
         --mode-stabilize: rgba(36, 107, 147, 0.26);
         --mode-manual: rgba(161, 61, 49, 0.24);
         --mode-other: rgba(103, 80, 154, 0.22);
+        --zero-line: rgba(161, 61, 49, 0.72);
+        --mode-transition: rgba(23, 33, 29, 0.5);
       }
 
       * {
@@ -335,6 +337,8 @@
           --mode-stabilize: rgba(56, 189, 248, 0.36);
           --mode-manual: rgba(248, 113, 113, 0.36);
           --mode-other: rgba(167, 139, 250, 0.34);
+          --zero-line: rgba(255, 147, 135, 0.82);
+          --mode-transition: rgba(247, 255, 249, 0.62);
         }
 
         body {
@@ -412,6 +416,7 @@
         hover: {},
         pinned: {},
         dragging: null,
+        pinch: null,
         skipClick: null,
       };
       const charts = new Map();
@@ -467,7 +472,7 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">拖拽平移时间和纵轴，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。</div>
+          <div class="readout" id="${id}-readout">拖拽平移时间和纵轴，双指捏合缩放，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。</div>
         </div>
         <div class="chart-control-bar">
           <button data-scale-reset="${id}">Reset scale</button>
@@ -508,23 +513,15 @@
       function setRange(start, end, source = "custom") {
         const full = state.fullRange;
         const minWidth = Math.max((full.end - full.start) * 0.002, 0.25);
-        let nextStart = Math.max(full.start, Number(start));
-        let nextEnd = Math.min(full.end, Number(end));
+        let nextStart = Number(start);
+        let nextEnd = Number(end);
         if (!finite(nextStart) || !finite(nextEnd) || nextEnd <= nextStart) return;
         if (nextEnd - nextStart < minWidth) {
           const mid = (nextStart + nextEnd) / 2;
           nextStart = mid - minWidth / 2;
           nextEnd = mid + minWidth / 2;
         }
-        if (nextStart < full.start) {
-          nextEnd += full.start - nextStart;
-          nextStart = full.start;
-        }
-        if (nextEnd > full.end) {
-          nextStart -= nextEnd - full.end;
-          nextEnd = full.end;
-        }
-        state.range = { start: Math.max(full.start, nextStart), end: Math.min(full.end, nextEnd) };
+        state.range = { start: nextStart, end: nextEnd };
         updateRangeText(source);
         renderAllCharts();
       }
@@ -660,6 +657,48 @@
         return cssVar("--mode-other");
       }
 
+      function drawZeroLine(ctx, yScale, yRange, pad, plotW) {
+        if (yRange.minY > 0 || yRange.maxY < 0) return;
+        const y = yScale(0);
+        ctx.save();
+        ctx.strokeStyle = cssVar("--zero-line");
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + plotW, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = cssVar("--zero-line");
+        ctx.fillText("0", pad.left + 4, y - 5);
+        ctx.restore();
+      }
+
+      function drawModeTransitions(ctx, chart, pad, plotW, plotH) {
+        ctx.save();
+        ctx.strokeStyle = cssVar("--mode-transition");
+        ctx.fillStyle = cssVar("--mode-text");
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 4]);
+        ctx.font = "11px Avenir Next, sans-serif";
+        for (const segment of modeData.segments) {
+          const time = Number(segment.mode_time_s);
+          if (!finite(time) || time < state.range.start || time > state.range.end) continue;
+          const x = chart.xScale(time);
+          if (x <= pad.left || x >= pad.left + plotW) continue;
+          ctx.beginPath();
+          ctx.moveTo(x, pad.top);
+          ctx.lineTo(x, pad.top + plotH);
+          ctx.stroke();
+          ctx.save();
+          ctx.translate(x + 4, pad.top + 6);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(segment.name, 0, 0);
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
       function drawModeBand(ctx, chart, pad, plotW) {
         const y = pad.top - 22;
         const height = 18;
@@ -732,6 +771,9 @@
           ctx.fillText(fmt.format(value) + "s", x - 15, height - 12);
         }
 
+        drawModeTransitions(ctx, config, pad, plotW, plotH);
+        drawZeroLine(ctx, yScale, yRange, pad, plotW);
+
         if (config.yLabel) ctx.fillText(config.yLabel, 6, 14);
         ctx.fillText("flight mode", pad.left, 14);
 
@@ -783,7 +825,7 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "拖拽平移时间和纵轴，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。";
+          readout.textContent = "拖拽平移时间和纵轴，双指捏合缩放，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。";
         }
       }
 
@@ -1013,6 +1055,21 @@
         const canvas = document.querySelector(`#${config.id}`);
         if (!canvas || config.bound) return;
         config.bound = true;
+        const pointers = new Map();
+        const pointerPair = () => [...pointers.values()].slice(0, 2);
+        const pairMetrics = () => {
+          const [a, b] = pointerPair();
+          if (!a || !b) return null;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          return {
+            dx: Math.max(Math.abs(dx), 8),
+            dy: Math.max(Math.abs(dy), 8),
+            distance: Math.max(Math.hypot(dx, dy), 8),
+            cx: (a.x + b.x) / 2,
+            cy: (a.y + b.y) / 2,
+          };
+        };
         canvas.addEventListener("wheel", (event) => {
           event.preventDefault();
           const rect = canvas.getBoundingClientRect();
@@ -1039,6 +1096,40 @@
         }, { passive: false });
         canvas.addEventListener("pointerdown", (event) => {
           canvas.setPointerCapture(event.pointerId);
+          pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          if (pointers.size >= 2) {
+            const metrics = pairMetrics();
+            const rect = canvas.getBoundingClientRect();
+            state.dragging = null;
+            if (config.type === "track") {
+              state.pinch = {
+                chartId: config.id,
+                type: "map-pinch",
+                distance: metrics.distance,
+                mapView: { ...config.mapView },
+              };
+            } else {
+              const centerRatioX = (metrics.cx - rect.left) / rect.width;
+              const pad = { left: 52, right: 16, top: 38, bottom: 34 };
+              const plotH = rect.height - pad.top - pad.bottom;
+              const centerRatioY = Math.max(0, Math.min(1, (metrics.cy - rect.top - pad.top) / Math.max(1, plotH)));
+              const xSpan = state.range.end - state.range.start;
+              const ySpan = config.yView.maxY - config.yView.minY;
+              state.pinch = {
+                chartId: config.id,
+                type: "plot-pinch",
+                dx: metrics.dx,
+                dy: metrics.dy,
+                centerRatioX,
+                centerRatioY,
+                centerTime: state.range.start + xSpan * centerRatioX,
+                centerY: config.yView.maxY - ySpan * centerRatioY,
+                xSpan,
+                ySpan,
+              };
+            }
+            return;
+          }
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
           } else {
@@ -1055,7 +1146,31 @@
           }
         });
         canvas.addEventListener("pointermove", (event) => {
+          if (pointers.has(event.pointerId)) pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
           const rect = canvas.getBoundingClientRect();
+          if (state.pinch?.chartId === config.id && pointers.size >= 2) {
+            const metrics = pairMetrics();
+            if (!metrics) return;
+            state.skipClick = config.id;
+            if (state.pinch.type === "map-pinch") {
+              config.mapView = { ...state.pinch.mapView };
+              config.mapView.metersPerPx = Math.max(state.pinch.mapView.metersPerPx * (state.pinch.distance / metrics.distance), 0.01);
+              drawTrackChart(config);
+            } else if (state.pinch.type === "plot-pinch") {
+              const nextXSpan = Math.max(state.pinch.xSpan * (state.pinch.dx / metrics.dx), 0.25);
+              const nextYSpan = Math.max(state.pinch.ySpan * (state.pinch.dy / metrics.dy), 1e-9);
+              config.yView = {
+                minY: state.pinch.centerY - (1 - state.pinch.centerRatioY) * nextYSpan,
+                maxY: state.pinch.centerY + state.pinch.centerRatioY * nextYSpan,
+              };
+              setRange(
+                state.pinch.centerTime - nextXSpan * state.pinch.centerRatioX,
+                state.pinch.centerTime + nextXSpan * (1 - state.pinch.centerRatioX),
+                "pinch",
+              );
+            }
+            return;
+          }
           if (state.dragging?.chartId === config.id && state.dragging.type === "map") {
             const dx = event.clientX - state.dragging.x;
             const dy = event.clientY - state.dragging.y;
@@ -1082,19 +1197,26 @@
             drawLineChart(config);
           }
         });
-        canvas.addEventListener("pointerup", (event) => {
-          const moved = state.dragging?.moved;
+        function endPointer(event) {
+          pointers.delete(event.pointerId);
+          const moved = state.dragging?.moved || state.pinch?.chartId === config.id;
           state.dragging = null;
+          if (state.pinch?.chartId === config.id) state.pinch = null;
           if (moved) {
             state.skipClick = config.id;
             setTimeout(() => {
               if (state.skipClick === config.id) state.skipClick = null;
             }, 0);
           }
-          canvas.releasePointerCapture(event.pointerId);
-        });
-        canvas.addEventListener("pointerleave", () => {
+          if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+        }
+
+        canvas.addEventListener("pointerup", endPointer);
+        canvas.addEventListener("pointercancel", endPointer);
+        canvas.addEventListener("pointerleave", (event) => {
+          if (event.pointerType !== "touch") pointers.delete(event.pointerId);
           state.dragging = null;
+          if (!pointers.size && state.pinch?.chartId === config.id) state.pinch = null;
           if (!state.pinned[config.id]) {
             delete state.hover[config.id];
             renderAllCharts();
