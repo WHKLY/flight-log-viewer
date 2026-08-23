@@ -12,10 +12,11 @@ Date: 2026-08-23
 - Mode buttons focus the full flight, `MANUAL`, `STABILIZE`, or `AUTO` ranges found in the actual log.
 - Each time-series chart supports shared-time mouse wheel zoom, shared-time drag pan, checkbox-based curve visibility, hover readout, click-to-lock readout, and double-click unlock.
 - Time-series vertical scale is chart-local state. Shared time-axis zoom/pan filters the visible samples but does not automatically rescale the Y axis.
-- `Shift + wheel`, `Y +`, `Y -`, `Y ↑`, `Y ↓`, left-axis drag, and `Reset Y` control each time-series chart's vertical scale and vertical position.
+- Dragging inside a time-series chart pans both axes: horizontal movement changes the shared time window, and vertical movement changes that chart's local Y-axis window.
 - Layers can be collapsed to keep the dashboard usable on a tablet screen.
 - The track panel is filtered by the same time window so mode focus changes the visible flight-path segment.
-- The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent map pan, map zoom, and `Reset map`.
+- `Shift + wheel`, `Y +`, `Y -`, and `Reset Y` control each time-series chart's vertical scale; pan is handled by direct drag rather than extra buttons.
+- The track panel uses an equal-scale local-meter projection for latitude/longitude geometry, filters invalid or far-off waypoint coordinates, and has independent drag pan, map zoom, and `Reset map`.
 
 ## Current sample
 

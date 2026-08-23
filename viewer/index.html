@@ -6,7 +6,7 @@
     <title>Flight Log Viewer</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --ink: #17211d;
         --muted: #607068;
         --soft: #eef2ec;
@@ -19,6 +19,12 @@
         --gold: #9a6b16;
         --violet: #67509a;
         --shadow: 0 18px 52px rgba(23, 33, 29, 0.08);
+        --canvas: #fbfcf8;
+        --mode-text: #10211b;
+        --mode-auto: rgba(245, 158, 11, 0.34);
+        --mode-stabilize: rgba(36, 107, 147, 0.26);
+        --mode-manual: rgba(161, 61, 49, 0.24);
+        --mode-other: rgba(103, 80, 154, 0.22);
       }
 
       * {
@@ -211,15 +217,15 @@
       canvas {
         display: block;
         width: 100%;
-        height: 282px;
+        height: 380px;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background: #fbfcf8;
+        background: var(--canvas);
         touch-action: none;
       }
 
       .small canvas {
-        height: 220px;
+        height: 310px;
       }
 
       .readout {
@@ -308,6 +314,51 @@
         padding: 12px;
       }
 
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #edf4ef;
+          --muted: #b7c6bd;
+          --soft: #1d2a24;
+          --paper: #0e1512;
+          --panel: #121d18;
+          --line: #32443b;
+          --green: #44d0a8;
+          --blue: #73c7f1;
+          --red: #ff9387;
+          --gold: #f2c36b;
+          --violet: #c5b0ff;
+          --shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+          --canvas: #101914;
+          --mode-text: #f7fff9;
+          --mode-auto: rgba(245, 158, 11, 0.46);
+          --mode-stabilize: rgba(56, 189, 248, 0.36);
+          --mode-manual: rgba(248, 113, 113, 0.36);
+          --mode-other: rgba(167, 139, 250, 0.34);
+        }
+
+        body {
+          background:
+            radial-gradient(circle at 8% 0%, rgba(68, 208, 168, 0.14), transparent 28%),
+            linear-gradient(120deg, rgba(115, 199, 241, 0.1), transparent 36%),
+            linear-gradient(315deg, rgba(242, 195, 107, 0.12), transparent 40%),
+            var(--paper);
+        }
+
+        .metric,
+        .notice,
+        .toolbar,
+        .layer,
+        .readout {
+          background: rgba(18, 29, 24, 0.94);
+        }
+
+        button {
+          background: #17241e;
+          color: var(--ink);
+        }
+      }
+
       @media (max-width: 860px) {
         .layer-head,
         .layer-body {
@@ -323,7 +374,7 @@
         }
 
         canvas {
-          height: 230px;
+          height: 320px;
         }
       }
     </style>
@@ -361,6 +412,7 @@
         hover: {},
         pinned: {},
         dragging: null,
+        skipClick: null,
       };
       const charts = new Map();
       let modeData = { segments: [] };
@@ -415,14 +467,12 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">滚轮缩放共享时间，Shift+滚轮缩放纵轴，左侧纵轴拖拽平移纵轴，点击锁定读数。</div>
+          <div class="readout" id="${id}-readout">拖拽平移时间和纵轴，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。</div>
         </div>
         <div class="chart-control-bar">
           <button data-scale-reset="${id}">Reset scale</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
-          <button data-scale-up="${id}">Y ↑</button>
-          <button data-scale-down="${id}">Y ↓</button>
         </div>
         <div class="legend" id="${id}-legend"></div>`;
       }
@@ -568,16 +618,6 @@
         };
       }
 
-      function panLineY(config, fraction) {
-        if (!config.yView) resetLineScale(config);
-        const span = config.yView.maxY - config.yView.minY;
-        const delta = span * fraction;
-        config.yView = {
-          minY: config.yView.minY + delta,
-          maxY: config.yView.maxY + delta,
-        };
-      }
-
       function visibleSeries(config) {
         const hidden = state.hidden[config.id] || {};
         return config.series.filter((seriesItem) => !hidden[seriesItem.label]);
@@ -609,20 +649,33 @@
         return best;
       }
 
+      function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function modeFill(name) {
+        if (name === "AUTO") return cssVar("--mode-auto");
+        if (name === "STABILIZE") return cssVar("--mode-stabilize");
+        if (name === "MANUAL") return cssVar("--mode-manual");
+        return cssVar("--mode-other");
+      }
+
       function drawModeBand(ctx, chart, pad, plotW) {
-        const y = pad.top - 18;
-        const height = 16;
+        const y = pad.top - 22;
+        const height = 18;
         ctx.save();
-        ctx.font = "11px Avenir Next, sans-serif";
+        ctx.font = "12px Avenir Next, sans-serif";
         for (const segment of currentSegments()) {
           const x0 = chart.xScale(Math.max(segment.start_s, state.range.start));
           const x1 = chart.xScale(Math.min(segment.end_s, state.range.end));
           if (x1 <= pad.left || x0 >= pad.left + plotW) continue;
-          ctx.fillStyle = segment.name === "AUTO" ? "rgba(15, 106, 85, 0.18)" : "rgba(36, 107, 147, 0.12)";
+          ctx.fillStyle = modeFill(segment.name);
           ctx.fillRect(x0, y, Math.max(2, x1 - x0), height);
-          if (x1 - x0 > 48) {
-            ctx.fillStyle = "#17211d";
-            ctx.fillText(segment.name, x0 + 4, y + 12);
+          ctx.strokeStyle = cssVar("--line");
+          ctx.strokeRect(x0, y, Math.max(2, x1 - x0), height);
+          if (x1 - x0 > 44) {
+            ctx.fillStyle = cssVar("--mode-text");
+            ctx.fillText(segment.name, x0 + 5, y + 13);
           }
         }
         ctx.restore();
@@ -730,7 +783,7 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "滚轮缩放共享时间，Shift+滚轮缩放纵轴，左侧纵轴拖拽平移纵轴，点击锁定读数。";
+          readout.textContent = "拖拽平移时间和纵轴，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。";
         }
       }
 
@@ -918,22 +971,16 @@
         const reset = document.querySelector(`[data-scale-reset="${config.id}"]`);
         const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
         const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
-        const panUp = document.querySelector(`[data-scale-up="${config.id}"]`);
-        const panDown = document.querySelector(`[data-scale-down="${config.id}"]`);
-        if (!reset || !zoomIn || !zoomOut || !panUp || !panDown || config.controlsBound) return;
+        if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
         config.controlsBound = true;
         if (config.type === "track") {
           reset.textContent = "Reset map";
           zoomIn.textContent = "Map +";
           zoomOut.textContent = "Map -";
-          panUp.textContent = "Map ↑";
-          panDown.textContent = "Map ↓";
         } else {
           reset.textContent = "Reset Y";
           zoomIn.textContent = "Y +";
           zoomOut.textContent = "Y -";
-          panUp.textContent = "Y ↑";
-          panDown.textContent = "Y ↓";
         }
         reset.addEventListener("click", () => {
           if (config.type === "track") resetTrackScale(config);
@@ -951,16 +998,6 @@
         zoomOut.addEventListener("click", () => {
           if (config.type === "track") config.mapView.metersPerPx *= 1.22;
           else zoomLineY(config, 1.22);
-          renderAllCharts();
-        });
-        panUp.addEventListener("click", () => {
-          if (config.type === "track") config.mapView.cy += config.mapView.metersPerPx * 60;
-          else panLineY(config, 0.18);
-          renderAllCharts();
-        });
-        panDown.addEventListener("click", () => {
-          if (config.type === "track") config.mapView.cy -= config.mapView.metersPerPx * 60;
-          else panLineY(config, -0.18);
           renderAllCharts();
         });
       }
@@ -1004,10 +1041,17 @@
           canvas.setPointerCapture(event.pointerId);
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
-          } else if (event.shiftKey || event.clientX - canvas.getBoundingClientRect().left < 58) {
-            state.dragging = { chartId: config.id, type: "y", y: event.clientY, minY: config.yView.minY, maxY: config.yView.maxY };
           } else {
-            state.dragging = { chartId: config.id, type: "time", x: event.clientX, start: state.range.start, end: state.range.end };
+            state.dragging = {
+              chartId: config.id,
+              type: "plot",
+              x: event.clientX,
+              y: event.clientY,
+              start: state.range.start,
+              end: state.range.end,
+              minY: config.yView.minY,
+              maxY: config.yView.maxY,
+            };
           }
         });
         canvas.addEventListener("pointermove", (event) => {
@@ -1015,22 +1059,23 @@
           if (state.dragging?.chartId === config.id && state.dragging.type === "map") {
             const dx = event.clientX - state.dragging.x;
             const dy = event.clientY - state.dragging.y;
+            state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
             config.mapView.cx = state.dragging.cx - dx * config.mapView.metersPerPx;
             config.mapView.cy = state.dragging.cy + dy * config.mapView.metersPerPx;
             drawTrackChart(config);
             return;
           }
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
-          if (state.dragging?.chartId === config.id && state.dragging.type === "y") {
+          if (state.dragging?.chartId === config.id && state.dragging.type === "plot") {
             const pad = { left: 52, right: 16, top: 38, bottom: 34 };
             const plotH = rect.height - pad.top - pad.bottom;
-            const span = state.dragging.maxY - state.dragging.minY;
-            const delta = ((event.clientY - state.dragging.y) / Math.max(1, plotH)) * span;
-            config.yView = { minY: state.dragging.minY + delta, maxY: state.dragging.maxY + delta };
-            drawLineChart(config);
-          } else if (state.dragging?.chartId === config.id && state.dragging.type === "time") {
             const dx = event.clientX - state.dragging.x;
+            const dy = event.clientY - state.dragging.y;
+            state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
             const dt = (-dx / rect.width) * (state.dragging.end - state.dragging.start);
+            const span = state.dragging.maxY - state.dragging.minY;
+            const yDelta = (dy / Math.max(1, plotH)) * span;
+            config.yView = { minY: state.dragging.minY + yDelta, maxY: state.dragging.maxY + yDelta };
             setRange(state.dragging.start + dt, state.dragging.end + dt, "pan");
           } else if (config.type !== "track") {
             state.hover[config.id] = { time };
@@ -1038,7 +1083,14 @@
           }
         });
         canvas.addEventListener("pointerup", (event) => {
+          const moved = state.dragging?.moved;
           state.dragging = null;
+          if (moved) {
+            state.skipClick = config.id;
+            setTimeout(() => {
+              if (state.skipClick === config.id) state.skipClick = null;
+            }, 0);
+          }
           canvas.releasePointerCapture(event.pointerId);
         });
         canvas.addEventListener("pointerleave", () => {
@@ -1050,6 +1102,10 @@
         });
         canvas.addEventListener("click", (event) => {
           if (config.type === "track") return;
+          if (state.skipClick === config.id) {
+            state.skipClick = null;
+            return;
+          }
           const rect = canvas.getBoundingClientRect();
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
           state.pinned[config.id] = { time };
