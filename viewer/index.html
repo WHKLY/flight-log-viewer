@@ -263,14 +263,12 @@
       }
 
       .chart-control-bar button,
-      .chart-control-bar input,
       .custom-controls button,
       .custom-controls select {
         font-size: 12px;
         padding: 5px 9px;
       }
 
-      .chart-control-bar input,
       .custom-controls select {
         background: var(--panel);
         border: 1px solid var(--line);
@@ -297,6 +295,18 @@
       .custom-controls label {
         display: grid;
         gap: 4px;
+      }
+
+      .wp-button {
+        border-radius: 6px;
+        padding: 4px 7px;
+        text-align: left;
+      }
+
+      .wp-button.active {
+        background: var(--gold);
+        border-color: var(--gold);
+        color: #1d1404;
       }
 
       .legend label {
@@ -454,6 +464,7 @@
         pinned: {},
         hRefs: {},
         timeRefs: [],
+        highlightedWaypointIndex: null,
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -487,7 +498,7 @@
           .map(
             (row) =>
               `<tr>${columns
-                .map((column) => `<td>${escapeHtml(column.format ? column.format(row[column.key], row) : (row[column.key] ?? ""))}</td>`)
+                .map((column) => `<td>${column.html ? column.html(row) : escapeHtml(column.format ? column.format(row[column.key], row) : (row[column.key] ?? ""))}</td>`)
                 .join("")}</tr>`,
           )
           .join("");
@@ -511,14 +522,12 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">拖拽平移时间和纵轴，双指捏合缩放，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。</div>
+          <div class="readout" id="${id}-readout">图内拖拽平移；左侧轴边拖动 Y 参考线；底部轴边拖动全局时间线；双指捏合缩放。</div>
         </div>
         <div class="chart-control-bar">
           <button data-scale-reset="${id}">Reset scale</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
-          <input data-href-input="${id}" type="number" step="any" placeholder="Y ref" />
-          <button data-href-add="${id}">Add Y ref</button>
           <button data-href-clear="${id}">Clear Y refs</button>
         </div>
         <div class="legend" id="${id}-legend"></div>`;
@@ -609,9 +618,8 @@
           <div class="chart-actions">
             <button id="zoom-out">Zoom out</button>
             <button id="clear-pins">Clear readouts</button>
-            <input id="time-ref-input" type="number" step="any" placeholder="Time ref s" />
-            <button id="add-time-ref">Add T ref</button>
             <button id="clear-time-refs">Clear T refs</button>
+            <span class="range-text">轴边操作：左侧 Y 轴边拖出横向线；底部时间轴边拖出全局竖线。</span>
           </div>
         </div>`;
         renderModeButtons();
@@ -620,17 +628,6 @@
         document.querySelector("#clear-pins").addEventListener("click", () => {
           state.pinned = {};
           renderAllCharts();
-        });
-        const timeRefInput = document.querySelector("#time-ref-input");
-        document.querySelector("#add-time-ref").addEventListener("click", () => {
-          const value = Number(timeRefInput.value);
-          if (!finite(value)) return;
-          state.timeRefs.push(value);
-          timeRefInput.value = "";
-          renderAllCharts();
-        });
-        timeRefInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") document.querySelector("#add-time-ref").click();
         });
         document.querySelector("#clear-time-refs").addEventListener("click", () => {
           state.timeRefs = [];
@@ -673,6 +670,36 @@
           minY: anchor - (1 - anchorRatio) * nextSpan,
           maxY: anchor + anchorRatio * nextSpan,
         };
+      }
+
+      function linePad() {
+        return { left: 52, right: 16, top: 38, bottom: 34 };
+      }
+
+      function linePlot(rect) {
+        const pad = linePad();
+        return { pad, plotW: rect.width - pad.left - pad.right, plotH: rect.height - pad.top - pad.bottom };
+      }
+
+      function yFromCanvas(config, localY, rect) {
+        const { pad, plotH } = linePlot(rect);
+        const ratio = (localY - pad.top) / Math.max(1, plotH);
+        return config.yView.maxY - ratio * (config.yView.maxY - config.yView.minY);
+      }
+
+      function timeFromCanvas(localX, rect) {
+        const { pad, plotW } = linePlot(rect);
+        const ratio = (localX - pad.left) / Math.max(1, plotW);
+        return state.range.start + ratio * (state.range.end - state.range.start);
+      }
+
+      function nearestIndexByPixel(values, pixelFn, pixel, threshold = 14) {
+        let best = { index: -1, distance: Infinity };
+        values.forEach((value, index) => {
+          const distance = Math.abs(pixelFn(value) - pixel);
+          if (distance < best.distance) best = { index, distance };
+        });
+        return best.distance <= threshold ? best.index : -1;
       }
 
       function visibleSeries(config) {
@@ -838,7 +865,7 @@
 
         const width = rect.width;
         const height = rect.height;
-        const pad = { left: 52, right: 16, top: 38, bottom: 34 };
+        const pad = linePad();
         const plotW = width - pad.left - pad.right;
         const plotH = height - pad.top - pad.bottom;
         const xStart = state.range.start;
@@ -933,7 +960,7 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "拖拽平移时间和纵轴，双指捏合缩放，滚轮缩放共享时间，Shift+滚轮缩放纵轴，点击锁定读数。";
+          readout.textContent = "图内拖拽平移；左侧轴边拖动 Y 参考线；底部轴边拖动全局时间线；双指捏合缩放。";
         }
       }
 
@@ -1083,6 +1110,18 @@
           ctx.arc(sx(point.x), sy(point.y), 3, 0, Math.PI * 2);
           ctx.fill();
         });
+        const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+        if (highlighted) {
+          const hx = sx(highlighted.x);
+          const hy = sy(highlighted.y);
+          ctx.strokeStyle = colors.red;
+          ctx.fillStyle = colors.red;
+          ctx.lineWidth = 2.8;
+          ctx.beginPath();
+          ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillText(`#${highlighted.row.index} ${highlighted.row.command_name}`, hx + 12, hy - 8);
+        }
         ctx.restore();
 
         ctx.strokeStyle = "#17211d";
@@ -1121,8 +1160,6 @@
         const reset = document.querySelector(`[data-scale-reset="${config.id}"]`);
         const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
         const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
-        const hInput = document.querySelector(`[data-href-input="${config.id}"]`);
-        const hAdd = document.querySelector(`[data-href-add="${config.id}"]`);
         const hClear = document.querySelector(`[data-href-clear="${config.id}"]`);
         if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
         config.controlsBound = true;
@@ -1130,8 +1167,6 @@
           reset.textContent = "Reset map";
           zoomIn.textContent = "Map +";
           zoomOut.textContent = "Map -";
-          hInput?.remove();
-          hAdd?.remove();
           hClear?.remove();
         } else {
           reset.textContent = "Reset Y";
@@ -1155,17 +1190,6 @@
           if (config.type === "track") config.mapView.metersPerPx *= 1.22;
           else zoomLineY(config, 1.22);
           renderAllCharts();
-        });
-        hAdd?.addEventListener("click", () => {
-          const value = Number(hInput.value);
-          if (!finite(value)) return;
-          state.hRefs[config.id] ||= [];
-          state.hRefs[config.id].push(value);
-          hInput.value = "";
-          renderAllCharts();
-        });
-        hInput?.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") hAdd.click();
         });
         hClear?.addEventListener("click", () => {
           state.hRefs[config.id] = [];
@@ -1262,6 +1286,33 @@
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
           } else {
+            const rect = canvas.getBoundingClientRect();
+            const { pad, plotW, plotH } = linePlot(rect);
+            const localX = event.clientX - rect.left;
+            const localY = event.clientY - rect.top;
+            const yScaleForRef = (value) => pad.top + (1 - (value - config.yView.minY) / (config.yView.maxY - config.yView.minY)) * plotH;
+            const xScaleForRef = (value) => pad.left + ((value - state.range.start) / (state.range.end - state.range.start)) * plotW;
+            if (localX <= pad.left && localY >= pad.top && localY <= pad.top + plotH) {
+              state.hRefs[config.id] ||= [];
+              let index = nearestIndexByPixel(state.hRefs[config.id], yScaleForRef, localY);
+              if (index < 0) {
+                state.hRefs[config.id].push(yFromCanvas(config, localY, rect));
+                index = state.hRefs[config.id].length - 1;
+              }
+              state.dragging = { chartId: config.id, type: "h-ref", index, moved: true };
+              renderAllCharts();
+              return;
+            }
+            if (localY >= pad.top + plotH && localX >= pad.left && localX <= pad.left + plotW) {
+              let index = nearestIndexByPixel(state.timeRefs, xScaleForRef, localX);
+              if (index < 0) {
+                state.timeRefs.push(timeFromCanvas(localX, rect));
+                index = state.timeRefs.length - 1;
+              }
+              state.dragging = { chartId: config.id, type: "time-ref", index, moved: true };
+              renderAllCharts();
+              return;
+            }
             state.dragging = {
               chartId: config.id,
               type: "plot",
@@ -1310,7 +1361,15 @@
             return;
           }
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
-          if (state.dragging?.chartId === config.id && state.dragging.type === "plot") {
+          if (state.dragging?.chartId === config.id && state.dragging.type === "h-ref") {
+            state.hRefs[config.id][state.dragging.index] = yFromCanvas(config, event.clientY - rect.top, rect);
+            state.dragging.moved = true;
+            renderAllCharts();
+          } else if (state.dragging?.chartId === config.id && state.dragging.type === "time-ref") {
+            state.timeRefs[state.dragging.index] = timeFromCanvas(event.clientX - rect.left, rect);
+            state.dragging.moved = true;
+            renderAllCharts();
+          } else if (state.dragging?.chartId === config.id && state.dragging.type === "plot") {
             const pad = { left: 52, right: 16, top: 38, bottom: 34 };
             const plotH = rect.height - pad.top - pad.bottom;
             const dx = event.clientX - state.dragging.x;
@@ -1429,6 +1488,18 @@
         });
       }
 
+      function bindWaypointButtons() {
+        document.querySelectorAll("[data-wp-index]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.highlightedWaypointIndex = Number(button.dataset.wpIndex);
+            document.querySelectorAll("[data-wp-index]").forEach((item) => {
+              item.classList.toggle("active", Number(item.dataset.wpIndex) === state.highlightedWaypointIndex);
+            });
+            renderAllCharts();
+          });
+        });
+      }
+
       function registerCharts(configs) {
         charts.clear();
         for (const config of configs) {
@@ -1509,7 +1580,7 @@
             chartPanel("track-chart"),
             `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
-              { key: "command_name", label: "Command" },
+              { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
               { key: "lon", label: "Lon", format: (v) => fmt.format(v) },
               { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
@@ -1559,6 +1630,7 @@
             button.textContent = section.classList.contains("collapsed") ? "展开" : "收起";
           });
         });
+        bindWaypointButtons();
 
         registerCharts([
           {
