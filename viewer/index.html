@@ -415,12 +415,14 @@
       function chartPanel(id, small = false) {
         return `<div class="chart-shell ${small ? "small" : ""}">
           <canvas id="${id}" data-chart="${id}"></canvas>
-          <div class="readout" id="${id}-readout">滚轮缩放共享时间，Shift+滚轮缩放纵轴，拖拽平移时间，点击锁定读数。</div>
+          <div class="readout" id="${id}-readout">滚轮缩放共享时间，Shift+滚轮缩放纵轴，左侧纵轴拖拽平移纵轴，点击锁定读数。</div>
         </div>
         <div class="chart-control-bar">
           <button data-scale-reset="${id}">Reset scale</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
+          <button data-scale-up="${id}">Y ↑</button>
+          <button data-scale-down="${id}">Y ↓</button>
         </div>
         <div class="legend" id="${id}-legend"></div>`;
       }
@@ -563,6 +565,16 @@
         config.yView = {
           minY: anchor - (1 - anchorRatio) * nextSpan,
           maxY: anchor + anchorRatio * nextSpan,
+        };
+      }
+
+      function panLineY(config, fraction) {
+        if (!config.yView) resetLineScale(config);
+        const span = config.yView.maxY - config.yView.minY;
+        const delta = span * fraction;
+        config.yView = {
+          minY: config.yView.minY + delta,
+          maxY: config.yView.maxY + delta,
         };
       }
 
@@ -718,25 +730,50 @@
               .join(" | ")}`;
           }
         } else {
-          readout.textContent = "滚轮缩放共享时间，Shift+滚轮缩放纵轴，拖拽平移时间，点击锁定读数。";
+          readout.textContent = "滚轮缩放共享时间，Shift+滚轮缩放纵轴，左侧纵轴拖拽平移纵轴，点击锁定读数。";
         }
+      }
+
+      function validGeo(lat, lon) {
+        return finite(lat) && finite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && Math.abs(lat) > 1e-6 && Math.abs(lon) > 1e-6;
       }
 
       function projectTrack(config) {
         if (config.projected) return config.projected;
-        const rawPoints = [
-          ...config.posRows.filter((row) => finite(Number(row.Lat)) && finite(Number(row.Lng))).map((row) => ({ kind: "pos", lat: Number(row.Lat), lon: Number(row.Lng), time_s: Number(row.time_s), row })),
-          ...config.waypointRows.filter((row) => finite(Number(row.lat)) && finite(Number(row.lon))).map((row) => ({ kind: "wp", lat: Number(row.lat), lon: Number(row.lon), row })),
-        ];
-        const refLat = rawPoints.reduce((sum, point) => sum + point.lat, 0) / Math.max(1, rawPoints.length);
-        const refLon = rawPoints.reduce((sum, point) => sum + point.lon, 0) / Math.max(1, rawPoints.length);
+        const posRaw = config.posRows
+          .filter((row) => validGeo(Number(row.Lat), Number(row.Lng)))
+          .map((row) => ({ kind: "pos", lat: Number(row.Lat), lon: Number(row.Lng), time_s: Number(row.time_s), row }));
+        const refSource = posRaw.length ? posRaw : config.waypointRows
+          .filter((row) => validGeo(Number(row.lat), Number(row.lon)))
+          .map((row) => ({ lat: Number(row.lat), lon: Number(row.lon) }));
+        const refLat = refSource.reduce((sum, point) => sum + point.lat, 0) / Math.max(1, refSource.length);
+        const refLon = refSource.reduce((sum, point) => sum + point.lon, 0) / Math.max(1, refSource.length);
         const latScale = 110540;
         const lonScale = 111320 * Math.cos((refLat * Math.PI) / 180);
-        config.projected = rawPoints.map((point) => ({
+        const project = (point) => ({
           ...point,
           x: (point.lon - refLon) * lonScale,
           y: (point.lat - refLat) * latScale,
-        }));
+        });
+        const projectedPos = posRaw.map(project);
+        const posBounds = projectedPos.length ? {
+          minX: Math.min(...projectedPos.map((point) => point.x)),
+          maxX: Math.max(...projectedPos.map((point) => point.x)),
+          minY: Math.min(...projectedPos.map((point) => point.y)),
+          maxY: Math.max(...projectedPos.map((point) => point.y)),
+        } : null;
+        const waypointLimitMeters = 3000;
+        const projectedWaypoints = config.waypointRows
+          .filter((row) => validGeo(Number(row.lat), Number(row.lon)))
+          .map((row) => project({ kind: "wp", lat: Number(row.lat), lon: Number(row.lon), row }))
+          .filter((point) => !posBounds || (
+            point.x >= posBounds.minX - waypointLimitMeters &&
+            point.x <= posBounds.maxX + waypointLimitMeters &&
+            point.y >= posBounds.minY - waypointLimitMeters &&
+            point.y <= posBounds.maxY + waypointLimitMeters
+          ));
+        config.projected = [...projectedPos, ...projectedWaypoints];
+        config.omittedWaypoints = config.waypointRows.length - projectedWaypoints.length;
         return config.projected;
       }
 
@@ -789,6 +826,7 @@
         const projected = projectTrack(config);
         const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= state.range.start && point.time_s <= state.range.end);
         const wpPoints = projected.filter((point) => point.kind === "wp");
+        const omittedWaypoints = config.omittedWaypoints || 0;
         const sx = (x) => plot.left + plot.width / 2 + (x - config.mapView.cx) / config.mapView.metersPerPx;
         const sy = (y) => plot.top + plot.height / 2 - (y - config.mapView.cy) / config.mapView.metersPerPx;
 
@@ -849,7 +887,7 @@
         ctx.fillStyle = "#607068";
         ctx.font = "12px Avenir Next, sans-serif";
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
-        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posPoints.length} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posPoints.length} | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -880,16 +918,22 @@
         const reset = document.querySelector(`[data-scale-reset="${config.id}"]`);
         const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
         const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
-        if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
+        const panUp = document.querySelector(`[data-scale-up="${config.id}"]`);
+        const panDown = document.querySelector(`[data-scale-down="${config.id}"]`);
+        if (!reset || !zoomIn || !zoomOut || !panUp || !panDown || config.controlsBound) return;
         config.controlsBound = true;
         if (config.type === "track") {
           reset.textContent = "Reset map";
           zoomIn.textContent = "Map +";
           zoomOut.textContent = "Map -";
+          panUp.textContent = "Map ↑";
+          panDown.textContent = "Map ↓";
         } else {
           reset.textContent = "Reset Y";
           zoomIn.textContent = "Y +";
           zoomOut.textContent = "Y -";
+          panUp.textContent = "Y ↑";
+          panDown.textContent = "Y ↓";
         }
         reset.addEventListener("click", () => {
           if (config.type === "track") resetTrackScale(config);
@@ -907,6 +951,16 @@
         zoomOut.addEventListener("click", () => {
           if (config.type === "track") config.mapView.metersPerPx *= 1.22;
           else zoomLineY(config, 1.22);
+          renderAllCharts();
+        });
+        panUp.addEventListener("click", () => {
+          if (config.type === "track") config.mapView.cy += config.mapView.metersPerPx * 60;
+          else panLineY(config, 0.18);
+          renderAllCharts();
+        });
+        panDown.addEventListener("click", () => {
+          if (config.type === "track") config.mapView.cy -= config.mapView.metersPerPx * 60;
+          else panLineY(config, -0.18);
           renderAllCharts();
         });
       }
@@ -950,6 +1004,8 @@
           canvas.setPointerCapture(event.pointerId);
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
+          } else if (event.shiftKey || event.clientX - canvas.getBoundingClientRect().left < 58) {
+            state.dragging = { chartId: config.id, type: "y", y: event.clientY, minY: config.yView.minY, maxY: config.yView.maxY };
           } else {
             state.dragging = { chartId: config.id, type: "time", x: event.clientX, start: state.range.start, end: state.range.end };
           }
@@ -965,7 +1021,14 @@
             return;
           }
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
-          if (state.dragging?.chartId === config.id && state.dragging.type === "time") {
+          if (state.dragging?.chartId === config.id && state.dragging.type === "y") {
+            const pad = { left: 52, right: 16, top: 38, bottom: 34 };
+            const plotH = rect.height - pad.top - pad.bottom;
+            const span = state.dragging.maxY - state.dragging.minY;
+            const delta = ((event.clientY - state.dragging.y) / Math.max(1, plotH)) * span;
+            config.yView = { minY: state.dragging.minY + delta, maxY: state.dragging.maxY + delta };
+            drawLineChart(config);
+          } else if (state.dragging?.chartId === config.id && state.dragging.type === "time") {
             const dx = event.clientX - state.dragging.x;
             const dt = (-dx / rect.width) * (state.dragging.end - state.dragging.start);
             setRange(state.dragging.start + dt, state.dragging.end + dt, "pan");
