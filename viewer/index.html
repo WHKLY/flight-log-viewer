@@ -29,6 +29,7 @@
         --mode-transition: rgba(23, 33, 29, 0.5);
         --custom-h-ref: rgba(154, 107, 22, 0.88);
         --custom-time-ref: rgba(36, 107, 147, 0.88);
+        --inspector-time: rgba(18, 128, 106, 0.95);
       }
 
       * {
@@ -188,7 +189,8 @@
       }
 
       .notice,
-      .toolbar {
+      .toolbar,
+      .inspector {
         background: rgba(255, 255, 255, 0.88);
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -351,6 +353,53 @@
         gap: 8px;
       }
 
+      .inspector {
+        display: grid;
+        gap: 10px;
+      }
+
+      .inspector-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        padding: 10px;
+      }
+
+      .inspector-card h3 {
+        margin-bottom: 6px;
+      }
+
+      .inspector-grid {
+        display: grid;
+        gap: 6px;
+      }
+
+      .inspector-row {
+        border-top: 1px solid var(--line);
+        display: grid;
+        gap: 4px;
+        padding-top: 6px;
+      }
+
+      .inspector-row:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .status-pill {
+        border-radius: 999px;
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: 4px;
+        padding: 2px 6px;
+        text-transform: uppercase;
+      }
+
+      .status-direct { background: rgba(15, 106, 85, 0.14); color: var(--green); }
+      .status-derived { background: rgba(154, 107, 22, 0.18); color: var(--gold); }
+      .status-missing { background: rgba(161, 61, 49, 0.14); color: var(--red); }
+
       .custom-controls label {
         display: grid;
         gap: 4px;
@@ -445,6 +494,7 @@
           --mode-transition: rgba(247, 255, 249, 0.62);
           --custom-h-ref: rgba(242, 195, 107, 0.92);
           --custom-time-ref: rgba(115, 199, 241, 0.92);
+          --inspector-time: rgba(68, 208, 168, 0.96);
         }
 
         body {
@@ -511,6 +561,7 @@
         </header>
         <div class="metrics" id="metrics"></div>
         <div id="timeline-toolbar"></div>
+        <div id="time-inspector"></div>
       </aside>
       <section class="viewer-panel">
         <div id="app"></div>
@@ -544,12 +595,14 @@
         hRefs: {},
         timeRefs: [],
         highlightedWaypointIndex: null,
+        inspectorTime: null,
         dragging: null,
         pinch: null,
         skipClick: null,
       };
       const charts = new Map();
       let modeData = { segments: [] };
+      let inspectorContext = null;
 
       async function loadJson(path) {
         const response = await fetch(path);
@@ -613,6 +666,206 @@
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;");
+      }
+
+      const controlChains = [
+        {
+          title: "AUTO Mission -> L1 -> NavRoll",
+          source: "AP_L1_Control::update_waypoint / nav_roll_cd; Plane::navigate; ModeAuto mission update",
+          formula: "waypoint geometry + groundspeed + cross-track/bearing error -> lateral acceleration demand -> demanded roll (NavRoll)",
+          params: ["NAVL1_PERIOD", "NAVL1_DAMPING", "NAVL1_XTRACK_I", "NAVL1_LIM_BANK", "ROLL_LIMIT_DEG", "STALL_PREVENTION"],
+          values: [
+            { label: "cross-track error", group: "navigation", message: "NTUN", field: "XT", unit: "m" },
+            { label: "waypoint distance", group: "navigation", message: "NTUN", field: "Dist", unit: "m" },
+            { label: "ground speed", group: "track", message: "GPS", field: "Spd", unit: "m/s" },
+            { label: "demanded roll", group: "navigation", message: "CTUN", field: "NavRoll", unit: "deg" },
+            { label: "actual roll", group: "attitude", message: "ATT", field: "Roll", unit: "deg" },
+          ],
+        },
+        {
+          title: "NavRoll -> Roll Attitude -> Rate PID",
+          source: "Plane::stabilize_roll; AP_RollController / AP_FW_Controller",
+          formula: "target roll -> attitude error -> target roll rate -> rate PID(P/I/D/FF) -> aileron demand",
+          params: ["RLL2SRV_TCONST", "RLL2SRV_RMAX", "RLL2SRV_ANGLE_P", "RLL_RATE_P", "RLL_RATE_I", "RLL_RATE_D", "RLL_RATE_FF", "SCALING_SPEED"],
+          values: [
+            { label: "target roll", group: "attitude", message: "ATT", field: "DesRoll", unit: "deg" },
+            { label: "actual roll", group: "attitude", message: "ATT", field: "Roll", unit: "deg" },
+            { label: "roll error", derive: "att_roll_error", unit: "deg" },
+            { label: "PIDR target", group: "pid", message: "PIDR", field: "Tar", unit: "deg/s" },
+            { label: "PIDR actual", group: "pid", message: "PIDR", field: "Act", unit: "deg/s" },
+            { label: "PIDR output", group: "pid", message: "PIDR", field: "Dmod" },
+          ],
+        },
+        {
+          title: "TECS Energy -> Pitch / Throttle",
+          source: "AP_TECS::update_pitch_throttle; Plane TECS update path",
+          formula: "height + speed energy errors -> throttle total-energy control and pitch energy-balance control",
+          params: ["TECS_TIME_CONST", "TECS_SPDWEIGHT", "TECS_RLL2THR", "TECS_INTEG_GAIN", "TECS_CLMB_MAX", "TECS_SINK_MIN", "TECS_SINK_MAX", "TECS_PITCH_MAX", "TECS_PITCH_MIN", "PTCH_LIM_MAX_DEG", "PTCH_LIM_MIN_DEG", "THR_MIN", "THR_MAX", "ARSPD_USE", "ARSPD_FBW_MIN", "ARSPD_FBW_MAX"],
+          values: [
+            { label: "height demand", group: "tecs", message: "TECS", field: "hdem", unit: "m" },
+            { label: "height", group: "tecs", message: "TECS", field: "h", unit: "m" },
+            { label: "speed demand", group: "tecs", message: "TECS", field: "spdem", unit: "m/s" },
+            { label: "speed", group: "tecs", message: "TECS", field: "sp", unit: "m/s" },
+            { label: "throttle demand", group: "tecs", message: "TECS", field: "th" },
+            { label: "pitch demand", group: "tecs", message: "TECS", field: "ph", unit: "deg" },
+            { label: "airspeed", group: "tecs", message: "ARSP", field: "Airspeed", unit: "m/s" },
+          ],
+        },
+        {
+          title: "PID / Mixer -> RCOU / SERVO",
+          source: "SRV_Channel output mixer and SERVO*_FUNCTION mapping",
+          formula: "controller demands + trims/limits + servo function mapping -> PWM output channels",
+          params: ["SERVO1_FUNCTION", "SERVO2_FUNCTION", "SERVO3_FUNCTION", "SERVO4_FUNCTION", "SERVO1_TRIM", "SERVO2_TRIM", "SERVO3_TRIM", "SERVO4_TRIM", "RC1_TRIM", "RC2_TRIM", "RC3_TRIM", "RC4_TRIM", "KFF_RDDRMIX"],
+          values: [
+            { label: "RC input C1", group: "io", message: "RCIN", field: "C1", unit: "us" },
+            { label: "RC input C2", group: "io", message: "RCIN", field: "C2", unit: "us" },
+            { label: "output C1", group: "io", message: "RCOU", field: "C1", unit: "us" },
+            { label: "output C2", group: "io", message: "RCOU", field: "C2", unit: "us" },
+            { label: "output C3", group: "io", message: "RCOU", field: "C3", unit: "us" },
+            { label: "output C4", group: "io", message: "RCOU", field: "C4", unit: "us" },
+          ],
+        },
+        {
+          title: "IMU / VIBE / EKF -> Motion State",
+          source: "AP_InertialSensor logging; EKF XKF* estimator state",
+          formula: "raw/scaled IMU acceleration + gyro + estimator states -> attitude, velocity, vibration and health interpretation",
+          params: ["INS_GYRO_FILTER", "INS_ACCEL_FILTER", "INS_HNTCH_ENABLE", "INS_NOTCH_ENABLE", "EK3_ENABLE", "EK3_IMU_MASK", "AHRS_EKF_TYPE", "VIBE_ENABLE"],
+          values: [
+            { label: "body accel X", group: "motion", message: "IMU", field: "AccX", unit: "m/s^2" },
+            { label: "body accel Y", group: "motion", message: "IMU", field: "AccY", unit: "m/s^2" },
+            { label: "body accel Z", group: "motion", message: "IMU", field: "AccZ", unit: "m/s^2" },
+            { label: "accel magnitude", derive: "accel_magnitude", unit: "m/s^2" },
+            { label: "gyro X", group: "motion", message: "IMU", field: "GyrX", unit: "rad/s" },
+            { label: "vibration X", group: "motion", message: "VIBE", field: "VibeX" },
+            { label: "EKF velocity north", group: "motion", message: "XKF1", field: "VN", unit: "m/s" },
+            { label: "EKF velocity down", group: "motion", message: "XKF1", field: "VD", unit: "m/s" },
+          ],
+        },
+      ];
+
+      function statusPill(status) {
+        return `<span class="status-pill status-${status}">${status}</span>`;
+      }
+
+      function findModeAt(time) {
+        return (modeData.segments || []).find((segment) => time >= segment.start_s && time <= segment.end_s) || null;
+      }
+
+      function nearestRow(rows, time) {
+        if (!Array.isArray(rows) || !rows.length || !finite(time)) return null;
+        let lo = 0;
+        let hi = rows.length - 1;
+        while (lo < hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          if (Number(rows[mid].time_s) < time) lo = mid + 1;
+          else hi = mid;
+        }
+        const candidates = [rows[lo - 1], rows[lo], rows[lo + 1]].filter(Boolean);
+        return candidates.reduce((best, row) => {
+          const distance = Math.abs(Number(row.time_s) - time);
+          return !best || distance < best.distance ? { row, distance } : best;
+        }, null);
+      }
+
+      function sampleLoggedValue(spec, time) {
+        const group = inspectorContext?.groups?.[spec.group];
+        const rows = group?.messages?.[spec.message] || [];
+        const nearest = nearestRow(rows, time);
+        if (!nearest || !(spec.field in nearest.row)) {
+          return { label: spec.label, status: "missing", value: "missing", source: `${spec.message}.${spec.field}` };
+        }
+        const value = Number(nearest.row[spec.field]);
+        return {
+          label: spec.label,
+          status: "direct",
+          value: finite(value) ? fmt.format(value) : escapeHtml(nearest.row[spec.field]),
+          unit: spec.unit || "",
+          source: `${spec.message}.${spec.field}`,
+          delta: nearest.distance,
+        };
+      }
+
+      function numericSample(group, message, field, time) {
+        const result = sampleLoggedValue({ label: field, group, message, field }, time);
+        if (result.status !== "direct") return null;
+        return Number(result.value.replaceAll(",", ""));
+      }
+
+      function sampleDerivedValue(spec, time) {
+        if (spec.derive === "att_roll_error") {
+          const target = numericSample("attitude", "ATT", "DesRoll", time);
+          const actual = numericSample("attitude", "ATT", "Roll", time);
+          if (!finite(target) || !finite(actual)) return { label: spec.label, status: "missing", value: "missing", source: "ATT.DesRoll - ATT.Roll" };
+          return { label: spec.label, status: "derived", value: fmt.format(target - actual), unit: spec.unit || "", source: "ATT.DesRoll - ATT.Roll" };
+        }
+        if (spec.derive === "accel_magnitude") {
+          const x = numericSample("motion", "IMU", "AccX", time);
+          const y = numericSample("motion", "IMU", "AccY", time);
+          const z = numericSample("motion", "IMU", "AccZ", time);
+          if (![x, y, z].every(finite)) return { label: spec.label, status: "missing", value: "missing", source: "sqrt(AccX^2 + AccY^2 + AccZ^2)" };
+          return { label: spec.label, status: "derived", value: fmt.format(Math.hypot(x, y, z)), unit: spec.unit || "", source: "sqrt(AccX^2 + AccY^2 + AccZ^2)" };
+        }
+        return { label: spec.label, status: "missing", value: "missing", source: spec.derive || "derived" };
+      }
+
+      function sampleValue(spec, time) {
+        return spec.derive ? sampleDerivedValue(spec, time) : sampleLoggedValue(spec, time);
+      }
+
+      function parameterMatches(names) {
+        const params = inspectorContext?.summary?.control_params || {};
+        const found = [];
+        for (const name of names) {
+          if (name.endsWith("*")) {
+            const prefix = name.slice(0, -1);
+            for (const key of Object.keys(params).sort()) {
+              if (key.startsWith(prefix)) found.push([key, params[key]]);
+            }
+          } else if (Object.prototype.hasOwnProperty.call(params, name)) {
+            found.push([name, params[name]]);
+          }
+        }
+        return found;
+      }
+
+      function renderParameterList(names) {
+        const matches = parameterMatches(names);
+        if (!matches.length) return `<p>${statusPill("missing")} 当前 param 摘要中没有这些参数。</p>`;
+        return `<div class="inspector-grid">${matches.slice(0, 12).map(([key, value]) => `<div><code>${escapeHtml(key)}</code> = ${escapeHtml(value)}</div>`).join("")}${matches.length > 12 ? `<p>另有 ${matches.length - 12} 个同层参数，可在后续参数面板展开。</p>` : ""}</div>`;
+      }
+
+      function renderValueList(values, time) {
+        return `<div class="inspector-grid">${values.map((spec) => {
+          const item = sampleValue(spec, time);
+          const delta = item.delta !== undefined ? `, dt=${fmt.format(item.delta)}s` : "";
+          return `<div class="inspector-row"><strong>${escapeHtml(item.label)} ${statusPill(item.status)}</strong><span>${escapeHtml(item.value)}${item.unit ? ` ${escapeHtml(item.unit)}` : ""}</span><small>${escapeHtml(item.source)}${delta}</small></div>`;
+        }).join("")}</div>`;
+      }
+
+      function renderInspector() {
+        const node = document.querySelector("#time-inspector");
+        if (!node) return;
+        if (!inspectorContext) {
+          node.innerHTML = "";
+          return;
+        }
+        const time = state.inspectorTime;
+        if (!finite(time)) {
+          node.innerHTML = `<div class="inspector"><div class="inspector-card"><h3>Time Inspector</h3><p>点击任意时间序列图上的一个点后，这里会显示该时间点的模式、日志值、参数值和源码公式链。</p></div></div>`;
+          return;
+        }
+        const mode = findModeAt(time);
+        const modeText = mode ? `${mode.name} (${fmt.format(mode.start_s)}s..${fmt.format(mode.end_s)}s)` : "unknown";
+        node.innerHTML = `<div class="inspector">
+          <div class="inspector-card"><h3>Time Inspector</h3><p>t = <strong>${fmt.format(time)}s</strong><br>mode = <strong>${escapeHtml(modeText)}</strong></p><p>${statusPill("direct")} 日志直接值 ${statusPill("derived")} 前端重建值 ${statusPill("missing")} 日志或参数缺失</p></div>
+          ${controlChains.map((chain) => `<div class="inspector-card"><h3>${escapeHtml(chain.title)}</h3><p>${escapeHtml(chain.formula)}</p><p><small>source: ${escapeHtml(chain.source)}</small></p><h3>Variables</h3>${renderValueList(chain.values, time)}<h3>Parameters</h3>${renderParameterList(chain.params)}</div>`).join("")}
+        </div>`;
+      }
+
+      function setInspectorTime(time) {
+        state.inspectorTime = time;
+        renderInspector();
+        renderAllCharts();
       }
 
       function table(rows, columns, limit = 12) {
@@ -932,6 +1185,25 @@
         ctx.restore();
       }
 
+      function drawInspectorTime(ctx, chart, pad, plotW, plotH) {
+        const time = state.inspectorTime;
+        if (!finite(time) || time < state.range.start || time > state.range.end) return;
+        const x = chart.xScale(time);
+        if (x <= pad.left || x >= pad.left + plotW) return;
+        ctx.save();
+        ctx.strokeStyle = cssVar("--inspector-time");
+        ctx.fillStyle = cssVar("--inspector-time");
+        ctx.lineWidth = 2;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, pad.top);
+        ctx.lineTo(x, pad.top + plotH);
+        ctx.stroke();
+        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.fillText(`inspect ${fmt.format(time)}s`, x + 5, pad.top + 14);
+        ctx.restore();
+      }
+
       function drawTimeRefs(ctx, chart, pad, plotW, plotH) {
         if (!state.timeRefs.length) return;
         ctx.save();
@@ -1058,6 +1330,7 @@
 
         drawModeTransitions(ctx, config, pad, plotW, plotH);
         drawTimeRefs(ctx, config, pad, plotW, plotH);
+        drawInspectorTime(ctx, config, pad, plotW, plotH);
         drawZeroLine(ctx, yScale, yRange, pad, plotW);
         drawHorizontalRefs(ctx, config, yScale, yRange, pad, plotW);
 
@@ -1547,7 +1820,7 @@
           const rect = canvas.getBoundingClientRect();
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
           state.pinned[config.id] = { time };
-          drawLineChart(config);
+          setInspectorTime(time);
         });
         canvas.addEventListener("dblclick", () => {
           delete state.pinned[config.id];
@@ -1680,6 +1953,11 @@
           ["modes", modesRaw],
         ].filter(([, value]) => !value).map(([name]) => name);
         modeData = modes;
+        inspectorContext = {
+          summary,
+          groups: { track, attitude, navigation, tecs, pid, motion, io, events },
+        };
+        renderInspector();
         const fallbackRange = rangeFromLoadedGroups([track, attitude, navigation, tecs, pid, motion, io, events]);
         const full = manifest.source?.time_range || fallbackRange;
         state.fullRange = { start: full.start_s ?? 0, end: full.end_s ?? 1 };

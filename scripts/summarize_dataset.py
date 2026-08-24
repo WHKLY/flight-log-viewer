@@ -32,6 +32,17 @@ CONTROL_PARAM_PREFIXES = (
     "THR_",
     "STICK_MIXING",
     "STALL_PREVENTION",
+    "SERVO",
+    "RC",
+    "INS_",
+    "EK2_",
+    "EK3_",
+    "AHRS_",
+    "VIBE",
+    "LOG_REPLAY",
+    "LIM_ROLL_CD",
+    "TRIM_",
+    "KFF_RDDRMIX",
 )
 
 MAV_CMD_NAMES = {

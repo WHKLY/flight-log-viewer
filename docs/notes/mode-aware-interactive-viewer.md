@@ -52,6 +52,22 @@ The viewer must separate three versions:
 
 When they differ, data parsing should trust the log's own `FMT` schema first. Control interpretation should show its source/version and avoid pretending that a newer source checkout exactly describes an older flown firmware.
 
+
+## Time Inspector plan
+
+Goal: when the user clicks a time-series chart at time `t`, show a control-chain explanation for that exact time window.
+
+First implementation scope:
+
+- Store the selected inspector time globally so all charts and explanation panels reference the same `t`.
+- Show the current flight mode and mode segment at `t` before any formula explanation.
+- For each control layer, show source/formula relationship, logged variables, parameter values, and output signals.
+- Mark every value as `direct`, `derived`, or `missing`; do not invent internal source variables that are not logged.
+- Prioritize these chains: AUTO Mission -> L1 -> NavRoll, NavRoll -> Roll/Rate PID, TECS -> pitch/throttle demand, PID/output -> RCOU/SERVO, IMU/VIBE/EKF -> motion state.
+- Expand parameter extraction so `SERVO*`, `RC*`, `INS_*`, `EK3_*`, `AHRS_*`, and related tuning parameters can appear in the inspector.
+
+Design rule: formula cards should state source location and interpretation confidence. If a variable is unavailable in DataFlash, the UI should say `missing` or `estimated`, not present it as a precise source calculation.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
