@@ -68,6 +68,21 @@ First implementation scope:
 
 Design rule: formula cards should state source location and interpretation confidence. If a variable is unavailable in DataFlash, the UI should say `missing` or `estimated`, not present it as a precise source calculation.
 
+
+## Mission execution inspector plan
+
+Goal: at any selected time `t`, show what mission/autopilot task the aircraft was executing, not only the flight mode.
+
+First implementation scope:
+
+- Extract DataFlash `CMD` records into a `mission` series group. `CMD.CNum` and `CMD.CId` are the first trusted source for current mission command/waypoint execution.
+- Also extract `MAVC` and `EV` into the same group for later command/event interpretation, but do not over-interpret them in the first UI pass.
+- In Time Inspector, show the latest `CMD` record at or before selected time `t`, including command number, MAV_CMD name, command parameters, target lat/lon/alt, and sample age.
+- Cross-reference the waypoint file by command number when available, so the UI can show both logged execution (`CMD`) and planned waypoint-file metadata.
+- If no `CMD` record exists, show `missing` and do not infer an exact active mission item from position alone. Later versions may add an explicit `estimated nearest leg` field.
+
+Design rule: mission command execution and flight mode are separate. `AUTO` tells who has authority; `CMD` tells which mission item/task is being executed.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.

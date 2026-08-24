@@ -585,6 +585,25 @@
         "XKF0", "XKF1", "XKF2", "XKF3", "XKF4", "XKF5", "XKFD", "XKFM", "XKFS", "XKT", "XKTV", "XKV1", "XKV2", "XKY0", "XKY1",
         "NKF0", "NKF1", "NKF2", "NKF3", "NKF4", "NKF5",
       ];
+      const missionMessageNames = ["CMD", "MAVC", "EV", "TERR", "ORGN"];
+      const mavCmdNames = {
+        16: "NAV_WAYPOINT",
+        17: "NAV_LOITER_UNLIM",
+        18: "NAV_LOITER_TURNS",
+        19: "NAV_LOITER_TIME",
+        20: "NAV_RETURN_TO_LAUNCH",
+        21: "NAV_LAND",
+        22: "NAV_TAKEOFF",
+        82: "NAV_SPLINE_WAYPOINT",
+        177: "DO_JUMP",
+        178: "DO_CHANGE_SPEED",
+        183: "DO_SET_SERVO",
+        184: "DO_REPEAT_SERVO",
+        189: "CONDITION_DISTANCE",
+        201: "DO_SET_ROI",
+        206: "DO_SET_CAM_TRIGG_DIST",
+        600: "DO_SET_RESUME_REPEAT_DIST",
+      };
       const state = {
         fullRange: { start: 0, end: 1 },
         range: { start: 0, end: 1 },
@@ -751,6 +770,66 @@
         return (modeData.segments || []).find((segment) => time >= segment.start_s && time <= segment.end_s) || null;
       }
 
+      function commandName(commandId) {
+        const id = Number(commandId);
+        return mavCmdNames[id] || `MAV_CMD_${finite(id) ? id : "?"}`;
+      }
+
+      function previousRow(rows, time) {
+        if (!Array.isArray(rows) || !rows.length || !finite(time)) return null;
+        let candidate = null;
+        for (const row of rows) {
+          const rowTime = Number(row.time_s);
+          if (!finite(rowTime)) continue;
+          if (rowTime <= time) candidate = row;
+          else break;
+        }
+        return candidate;
+      }
+
+      function plannedWaypointForCommand(commandNumber) {
+        const index = Number(commandNumber);
+        if (!finite(index)) return null;
+        return (inspectorContext?.summary?.waypoints || []).find((waypoint) => Number(waypoint.index) === index) || null;
+      }
+
+      function formatMissionCommand(row, time) {
+        if (!row) {
+          return `<p>${statusPill("missing")} 日志中没有 <code>CMD</code> 任务执行记录。</p>`;
+        }
+        const age = finite(time) && finite(Number(row.time_s)) ? Math.max(0, time - Number(row.time_s)) : null;
+        const commandNumber = Number(row.CNum);
+        const commandId = Number(row.CId);
+        const planned = plannedWaypointForCommand(commandNumber);
+        const commandLabel = `${commandName(commandId)} (#${finite(commandNumber) ? commandNumber : "?"})`;
+        const target = validGeo(Number(row.Lat), Number(row.Lng))
+          ? `${fmt.format(row.Lat)}, ${fmt.format(row.Lng)}, alt ${fmt.format(row.Alt)}`
+          : "no target lat/lon";
+        const plannedText = planned
+          ? `${planned.command_name}, lat ${fmt.format(planned.lat)}, lon ${fmt.format(planned.lon)}, alt ${fmt.format(planned.alt)}`
+          : "no matching waypoint-file row";
+        return `<div class="inspector-grid">
+          <div><strong>${escapeHtml(commandLabel)}</strong> ${statusPill("direct")}</div>
+          <div>logged at ${fmt.format(row.time_s)}s${age !== null ? `, age ${fmt.format(age)}s` : ""}</div>
+          <div>target: ${escapeHtml(target)}</div>
+          <div>params: ${["Prm1", "Prm2", "Prm3", "Prm4"].map((key) => `${key}=${fmt.format(Number(row[key]) || 0)}`).join(" | ")}</div>
+          <div>waypoint file: ${escapeHtml(plannedText)}</div>
+        </div>`;
+      }
+
+      function renderMissionAt(time) {
+        const mode = findModeAt(time);
+        const cmdRows = inspectorContext?.groups?.mission?.messages?.CMD || [];
+        if (!mode || mode.name !== "AUTO") {
+          return `<p>${statusPill("missing")} 当前模式不是 AUTO；日志中的 mission command 只作为已加载/历史记录，不解释为当前正在执行。</p>`;
+        }
+        const row = previousRow(cmdRows, time);
+        if (!row || Number(row.time_s) < Number(mode.start_s) - 0.25) {
+          return `<p>${statusPill("missing")} 当前 AUTO 段内还没有可用的 CMD 执行记录。</p>`;
+        }
+        return formatMissionCommand(row, time);
+      }
+
       function nearestRow(rows, time) {
         if (!Array.isArray(rows) || !rows.length || !finite(time)) return null;
         let lo = 0;
@@ -851,13 +930,13 @@
         }
         const time = state.inspectorTime;
         if (!finite(time)) {
-          node.innerHTML = `<div class="inspector"><div class="inspector-card"><h3>Time Inspector</h3><p>点击任意时间序列图上的一个点后，这里会显示该时间点的模式、日志值、参数值和源码公式链。</p></div></div>`;
+          node.innerHTML = `<div class="inspector"><div class="inspector-card"><h3>Time Inspector</h3><p>点击任意时间序列图上的一个点后，这里会显示该时间点的模式、任务命令、日志值、参数值和源码公式链。</p></div></div>`;
           return;
         }
         const mode = findModeAt(time);
         const modeText = mode ? `${mode.name} (${fmt.format(mode.start_s)}s..${fmt.format(mode.end_s)}s)` : "unknown";
         node.innerHTML = `<div class="inspector">
-          <div class="inspector-card"><h3>Time Inspector</h3><p>t = <strong>${fmt.format(time)}s</strong><br>mode = <strong>${escapeHtml(modeText)}</strong></p><p>${statusPill("direct")} 日志直接值 ${statusPill("derived")} 前端重建值 ${statusPill("missing")} 日志或参数缺失</p></div>
+          <div class="inspector-card"><h3>Time Inspector</h3><p>t = <strong>${fmt.format(time)}s</strong><br>mode = <strong>${escapeHtml(modeText)}</strong></p><h3>Mission command</h3>${renderMissionAt(time)}<p>${statusPill("direct")} 日志直接值 ${statusPill("derived")} 前端重建值 ${statusPill("missing")} 日志或参数缺失</p></div>
           ${controlChains.map((chain) => `<div class="inspector-card"><h3>${escapeHtml(chain.title)}</h3><p>${escapeHtml(chain.formula)}</p><p><small>source: ${escapeHtml(chain.source)}</small></p><h3>Variables</h3>${renderValueList(chain.values, time)}<h3>Parameters</h3>${renderParameterList(chain.params)}</div>`).join("")}
         </div>`;
       }
@@ -1918,6 +1997,7 @@
           loadJsonOptional("../public-data/dataset-summary.json"),
           loadJsonOptional("../public-data/series/manifest.json"),
           loadJsonOptional("../public-data/series/track.json"),
+          loadJsonOptional("../public-data/series/mission.json"),
           loadJsonOptional("../public-data/series/attitude.json"),
           loadJsonOptional("../public-data/series/navigation.json"),
           loadJsonOptional("../public-data/series/tecs.json"),
@@ -1927,10 +2007,11 @@
           loadJsonOptional("../public-data/series/events.json"),
           loadJsonOptional("../public-data/series/modes.json"),
         ]);
-        const [summaryRaw, manifestRaw, trackRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw] = loaded;
+        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw] = loaded;
         const summary = summaryRaw || defaultSummary();
         const manifest = manifestRaw || defaultManifest();
         const track = withMessages(trackRaw, ["POS", "GPS"]);
+        const mission = withMessages(missionRaw, missionMessageNames);
         const attitude = withMessages(attitudeRaw, ["ATT", "AHR2", "XKQ"]);
         const navigation = withMessages(navigationRaw, ["CTUN", "NTUN"]);
         const tecs = withMessages(tecsRaw, ["TECS", "TEC2", "ARSP"]);
@@ -1943,6 +2024,7 @@
           ["dataset-summary", summaryRaw],
           ["manifest", manifestRaw],
           ["track", trackRaw],
+          ["mission", missionRaw],
           ["attitude", attitudeRaw],
           ["navigation", navigationRaw],
           ["tecs", tecsRaw],
@@ -1955,7 +2037,7 @@
         modeData = modes;
         inspectorContext = {
           summary,
-          groups: { track, attitude, navigation, tecs, pid, motion, io, events },
+          groups: { track, mission, attitude, navigation, tecs, pid, motion, io, events },
         };
         renderInspector();
         const fallbackRange = rangeFromLoadedGroups([track, attitude, navigation, tecs, pid, motion, io, events]);
@@ -1968,6 +2050,7 @@
           metric("Firmware", manifest.compatibility?.log_firmware || "unknown"),
           metric("Records", Object.values(manifest.source?.target_counts || {}).reduce((a, b) => a + b, 0)),
           metric("Modes", [...new Set((modes.segments || []).map((segment) => segment.name))].join(" / ") || "none"),
+          metric("Mission CMD", mission.messages.CMD.length),
           metric("Params", summary.counts?.parameters ?? 0),
           metric("Waypoints", summary.counts?.waypoints ?? 0),
         ].join("");
@@ -1979,6 +2062,15 @@
           document.querySelector("#toggle-controls").textContent = root.classList.contains("controls-collapsed") ? "Show" : "Hide";
           renderAllCharts();
         });
+
+        const missionRows = (mission.messages.CMD || []).map((row) => ({
+          time_s: row.time_s,
+          cnum: row.CNum,
+          command: commandName(row.CId),
+          lat: row.Lat,
+          lng: row.Lng,
+          alt: row.Alt,
+        }));
 
         const modeRows = (modes.segments || []).map((segment) => ({
           time_s: segment.mode_time_s,
@@ -2003,6 +2095,11 @@
               { key: "mode_num", label: "Num" },
               { key: "duration_s", label: "Duration", format: (v) => fmt.format(v) },
               { key: "reason", label: "Reason" },
+            ], 12)}<h3>Mission CMD</h3>${table(missionRows, [
+              { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
+              { key: "cnum", label: "#" },
+              { key: "command", label: "Command" },
+              { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
             ], 12)}<h3>Recent messages</h3>${table(events.messages.MSG.slice(-8), [
               { key: "time_s", label: "time_s", format: (v) => fmt.format(v) },
               { key: "Message", label: "Message" },
@@ -2163,7 +2260,7 @@
           },
           { id: "custom-chart", type: "line", yLabel: "custom", series: [] },
         ]);
-        bindCustomChartControls(buildDataCatalog([track, attitude, navigation, tecs, pid, motion, io, events]));
+        bindCustomChartControls(buildDataCatalog([track, mission, attitude, navigation, tecs, pid, motion, io, events]));
         window.addEventListener("resize", renderAllCharts);
       }
 
