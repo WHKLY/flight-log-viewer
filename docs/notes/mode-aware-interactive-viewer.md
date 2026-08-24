@@ -96,6 +96,18 @@ Changes for this pass:
 - Keep controls in the left panel, charts on the right, and make the left panel readable as a control surface rather than a text article.
 - Prefer short labels and small value rows over paragraphs. Missing data should be visible through status badges, not long explanatory text.
 
+
+## Inspector and font controls plan
+
+Goal: make the left control panel adjustable while inspecting dense logs on a tablet.
+
+Changes for this pass:
+
+- Add an Inspector hide/show toggle that keeps selected inspect time and chart marker state intact.
+- Add a global font-size control cycling through compact, normal, and large UI text sizes.
+- Keep both controls in the left global toolbar so they are available without opening chart layers.
+- Font scaling should update layout and canvases immediately after switching.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.

@@ -37,6 +37,7 @@
       }
 
       body {
+        --font-scale: 1;
         margin: 0;
         background:
           radial-gradient(circle at 8% 0%, rgba(15, 106, 85, 0.14), transparent 28%),
@@ -45,6 +46,15 @@
           var(--paper);
         color: var(--ink);
         font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
+        font-size: calc(15px * var(--font-scale));
+      }
+
+      body.font-compact {
+        --font-scale: 0.9;
+      }
+
+      body.font-large {
+        --font-scale: 1.14;
       }
 
       main {
@@ -93,7 +103,7 @@
 
       .control-title {
         color: var(--muted);
-        font-size: 12px;
+        font-size: calc(12px * var(--font-scale));
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -122,16 +132,16 @@
       }
 
       h1 {
-        font-size: clamp(22px, 4vw, 30px);
+        font-size: clamp(calc(21px * var(--font-scale)), 4vw, calc(30px * var(--font-scale)));
         letter-spacing: -0.03em;
       }
 
       h2 {
-        font-size: 20px;
+        font-size: calc(20px * var(--font-scale));
       }
 
       h3 {
-        font-size: 15px;
+        font-size: calc(15px * var(--font-scale));
       }
 
       p,
@@ -180,13 +190,13 @@
       }
 
       .metric p {
-        font-size: 11px;
+        font-size: calc(11px * var(--font-scale));
       }
 
       .metric strong {
         display: block;
         color: var(--green);
-        font-size: 16px;
+        font-size: calc(16px * var(--font-scale));
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -219,7 +229,7 @@
 
       .range-text {
         color: var(--muted);
-        font-size: 13px;
+        font-size: calc(13px * var(--font-scale));
       }
 
       .layer {
@@ -242,13 +252,13 @@
       }
 
       .layer-head p {
-        font-size: 13px;
+        font-size: calc(13px * var(--font-scale));
         max-width: 820px;
       }
 
       .layer-index {
         color: var(--muted);
-        font-size: 12px;
+        font-size: calc(12px * var(--font-scale));
         font-weight: 700;
       }
 
@@ -317,7 +327,7 @@
         flex-wrap: wrap;
         gap: 8px 14px;
         margin-top: 8px;
-        font-size: 13px;
+        font-size: calc(13px * var(--font-scale));
       }
 
       .chart-control-bar {
@@ -390,7 +400,7 @@
       }
 
       .inspector-actions button {
-        font-size: 12px;
+        font-size: calc(12px * var(--font-scale));
         padding: 5px 9px;
       }
 
@@ -415,7 +425,7 @@
       .kv span {
         color: var(--muted);
         display: block;
-        font-size: 11px;
+        font-size: calc(11px * var(--font-scale));
       }
 
       .kv strong {
@@ -453,7 +463,11 @@
       }
 
       .mini-list code {
-        font-size: 11px;
+        font-size: calc(11px * var(--font-scale));
+      }
+
+      .inspector-collapsed .inspector-body {
+        display: none;
       }
 
       .status-pill {
@@ -685,6 +699,8 @@
         timeRefs: [],
         highlightedWaypointIndex: null,
         inspectorTime: null,
+        inspectorCollapsed: false,
+        fontScale: "normal",
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -973,6 +989,39 @@
         }).join("")}</div>`;
       }
 
+      function inspectorToggleLabel() {
+        return state.inspectorCollapsed ? "Show" : "Hide";
+      }
+
+      function bindInspectorButtons() {
+        document.querySelectorAll("[data-toggle-inspector]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.inspectorCollapsed = !state.inspectorCollapsed;
+            renderInspector();
+          });
+        });
+        document.querySelector("#clear-inspect-inline")?.addEventListener("click", clearInspect);
+      }
+
+      function fontScaleLabel() {
+        if (state.fontScale === "compact") return "Font: Compact";
+        if (state.fontScale === "large") return "Font: Large";
+        return "Font: Normal";
+      }
+
+      function applyFontScale() {
+        document.body.classList.toggle("font-compact", state.fontScale === "compact");
+        document.body.classList.toggle("font-large", state.fontScale === "large");
+        const button = document.querySelector("#font-scale");
+        if (button) button.textContent = fontScaleLabel();
+        renderAllCharts();
+      }
+
+      function cycleFontScale() {
+        state.fontScale = state.fontScale === "normal" ? "large" : state.fontScale === "large" ? "compact" : "normal";
+        applyFontScale();
+      }
+
       function renderInspector() {
         const node = document.querySelector("#time-inspector");
         if (!node) return;
@@ -980,27 +1029,29 @@
           node.innerHTML = "";
           return;
         }
+        const collapsedClass = state.inspectorCollapsed ? " inspector-collapsed" : "";
         const time = state.inspectorTime;
         if (!finite(time)) {
-          node.innerHTML = `<div class="inspector"><div class="inspector-card"><div class="inspector-head"><h3>Inspector</h3></div><p>点击图像上的时间点开始检查。</p></div></div>`;
+          node.innerHTML = `<div class="inspector${collapsedClass}"><div class="inspector-card"><div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button data-toggle-inspector>${inspectorToggleLabel()}</button></div></div><div class="inspector-body"><p>点击图像上的时间点开始检查。</p></div></div></div>`;
+          bindInspectorButtons();
           return;
         }
         const mode = findModeAt(time);
         const mission = missionInfoAt(time);
         const modeText = mode ? `${mode.name} ${fmt.format(mode.start_s)}..${fmt.format(mode.end_s)}s` : "unknown";
-        node.innerHTML = `<div class="inspector">
+        node.innerHTML = `<div class="inspector${collapsedClass}">
           <div class="inspector-card">
-            <div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button id="clear-inspect-inline">Clear inspect</button></div></div>
-            <div class="kv-grid">
+            <div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button data-toggle-inspector>${inspectorToggleLabel()}</button><button id="clear-inspect-inline">Clear inspect</button></div></div>
+            <div class="inspector-body"><div class="kv-grid">
               <div class="kv"><span>time</span><strong>${fmt.format(time)}s</strong></div>
               <div class="kv"><span>mode</span><strong>${escapeHtml(modeText)}</strong></div>
               <div class="kv"><span>mission</span><strong>${escapeHtml(mission.label)} ${statusPill(mission.status)}</strong></div>
               <div class="kv"><span>target</span><strong title="${escapeHtml(mission.params || "")}">${escapeHtml(mission.detail || "")}</strong></div>
-            </div>
+            </div></div>
           </div>
-          ${controlChains.map((chain) => `<div class="inspector-card"><div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3></div>${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>`).join("")}
+          <div class="inspector-body">${controlChains.map((chain) => `<div class="inspector-card"><div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3></div>${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>`).join("")}</div>
         </div>`;
-        document.querySelector("#clear-inspect-inline")?.addEventListener("click", clearInspect);
+        bindInspectorButtons();
       }
 
       function clearInspect() {
@@ -1144,6 +1195,7 @@
           <div class="mode-buttons" id="mode-buttons"></div>
           <div class="chart-actions">
             <button id="zoom-out">Zoom out</button>
+            <button id="font-scale">Font: Normal</button>
             <button id="clear-inspect">Clear inspect</button>
             <button id="clear-pins">Clear readouts</button>
             <button id="clear-time-refs">Clear T refs</button>
@@ -1152,6 +1204,8 @@
         renderModeButtons();
         updateRangeText("all");
         document.querySelector("#zoom-out").addEventListener("click", () => focusMode("all"));
+        document.querySelector("#font-scale").addEventListener("click", cycleFontScale);
+        applyFontScale();
         document.querySelector("#clear-inspect").addEventListener("click", clearInspect);
         document.querySelector("#clear-pins").addEventListener("click", () => {
           state.pinned = {};
@@ -1265,6 +1319,14 @@
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
       }
 
+      function currentFontScale() {
+        return Number(getComputedStyle(document.body).getPropertyValue("--font-scale")) || 1;
+      }
+
+      function canvasFont(px) {
+        return `${Math.round(px * currentFontScale())}px Avenir Next, sans-serif`;
+      }
+
       function modeFill(name) {
         if (name === "AUTO") return cssVar("--mode-auto");
         if (name === "STABILIZE") return cssVar("--mode-stabilize");
@@ -1295,7 +1357,7 @@
         ctx.fillStyle = cssVar("--mode-text");
         ctx.lineWidth = 1.2;
         ctx.setLineDash([3, 4]);
-        ctx.font = "11px Avenir Next, sans-serif";
+        ctx.font = canvasFont(11);
         for (const segment of modeData.segments) {
           const time = Number(segment.mode_time_s);
           if (!finite(time) || time < state.range.start || time > state.range.end) continue;
@@ -1322,7 +1384,7 @@
         ctx.fillStyle = cssVar("--custom-h-ref");
         ctx.lineWidth = 1.4;
         ctx.setLineDash([10, 5]);
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         for (const value of refs) {
           if (!finite(value) || value < yRange.minY || value > yRange.maxY) continue;
           const y = yScale(value);
@@ -1349,7 +1411,7 @@
         ctx.moveTo(x, pad.top);
         ctx.lineTo(x, pad.top + plotH);
         ctx.stroke();
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         ctx.fillText(`inspect ${fmt.format(time)}s`, x + 5, pad.top + 14);
         ctx.restore();
       }
@@ -1361,7 +1423,7 @@
         ctx.fillStyle = cssVar("--custom-time-ref");
         ctx.lineWidth = 1.5;
         ctx.setLineDash([9, 5]);
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         for (const time of state.timeRefs) {
           if (!finite(time) || time < state.range.start || time > state.range.end) continue;
           const x = chart.xScale(time);
@@ -1383,7 +1445,7 @@
         const y = pad.top - 22;
         const height = 18;
         ctx.save();
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         for (const segment of currentSegments()) {
           const x0 = chart.xScale(Math.max(segment.start_s, state.range.start));
           const x1 = chart.xScale(Math.min(segment.end_s, state.range.end));
@@ -1428,7 +1490,7 @@
         drawModeBand(ctx, config, pad, plotW);
         ctx.strokeStyle = "#d7ded6";
         ctx.lineWidth = 1;
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         ctx.fillStyle = "#607068";
 
         for (let i = 0; i <= 4; i++) {
@@ -1678,7 +1740,7 @@
         ctx.strokeStyle = "#17211d";
         ctx.strokeRect(plot.left, plot.top, plot.width, plot.height);
         ctx.fillStyle = "#607068";
-        ctx.font = "12px Avenir Next, sans-serif";
+        ctx.font = canvasFont(12);
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
         document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posPoints.length} | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
