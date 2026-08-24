@@ -83,6 +83,19 @@ First implementation scope:
 
 Design rule: mission command execution and flight mode are separate. `AUTO` tells who has authority; `CMD` tells which mission item/task is being executed.
 
+
+## UI simplification plan
+
+Goal: keep the tablet UI operational first. The viewer should not read like documentation during normal log inspection.
+
+Changes for this pass:
+
+- Time Inspector defaults to compact status cards: selected time, mode, mission command, values, and key parameters.
+- Long formula/source explanations are removed from the default view; detailed source notes should be available only on demand in later iterations.
+- Add a clear-inspect action that removes the global inspect line and clears pinned readouts.
+- Keep controls in the left panel, charts on the right, and make the left panel readable as a control surface rather than a text article.
+- Prefer short labels and small value rows over paragraphs. Missing data should be visible through status badges, not long explanatory text.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.

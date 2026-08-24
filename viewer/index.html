@@ -166,8 +166,8 @@
 
       .metrics {
         display: grid;
-        gap: 10px;
-        grid-template-columns: 1fr;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         margin: 0;
       }
 
@@ -175,14 +175,18 @@
         background: rgba(255, 255, 255, 0.88);
         border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 12px;
+        padding: 8px;
         box-shadow: var(--shadow);
+      }
+
+      .metric p {
+        font-size: 11px;
       }
 
       .metric strong {
         display: block;
         color: var(--green);
-        font-size: 20px;
+        font-size: 16px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -228,23 +232,24 @@
       }
 
       .layer-head {
-        align-items: start;
+        align-items: center;
         display: grid;
-        gap: 12px;
+        gap: 10px;
         grid-template-columns: 1fr auto auto;
-        padding: 14px 16px;
+        padding: 11px 14px;
         border-bottom: 1px solid var(--line);
         background: linear-gradient(90deg, rgba(15, 106, 85, 0.09), rgba(255, 255, 255, 0));
       }
 
       .layer-head p {
+        font-size: 13px;
         max-width: 820px;
       }
 
       .layer-index {
-        color: var(--green);
+        color: var(--muted);
+        font-size: 12px;
         font-weight: 700;
-        padding-top: 2px;
       }
 
       .layer-toggle {
@@ -365,8 +370,28 @@
         padding: 10px;
       }
 
+      .inspector-head {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .inspector-head h3,
       .inspector-card h3 {
-        margin-bottom: 6px;
+        margin-bottom: 0;
+      }
+
+      .inspector-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .inspector-actions button {
+        font-size: 12px;
+        padding: 5px 9px;
       }
 
       .inspector-grid {
@@ -374,16 +399,61 @@
         gap: 6px;
       }
 
+      .kv-grid {
+        display: grid;
+        gap: 6px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 8px;
+      }
+
+      .kv {
+        background: var(--soft);
+        border-radius: 8px;
+        padding: 7px;
+      }
+
+      .kv span {
+        color: var(--muted);
+        display: block;
+        font-size: 11px;
+      }
+
+      .kv strong {
+        color: var(--ink);
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .inspector-row {
+        align-items: start;
         border-top: 1px solid var(--line);
         display: grid;
-        gap: 4px;
+        gap: 6px;
+        grid-template-columns: minmax(82px, 0.9fr) minmax(0, 1.1fr);
         padding-top: 6px;
       }
 
       .inspector-row:first-child {
         border-top: 0;
         padding-top: 0;
+      }
+
+      .inspector-row small {
+        color: var(--muted);
+        grid-column: 1 / -1;
+      }
+
+      .mini-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 7px;
+      }
+
+      .mini-list code {
+        font-size: 11px;
       }
 
       .status-pill {
@@ -557,7 +627,7 @@
         <div class="control-strip"><span class="control-title">Controls</span><button id="toggle-controls">Hide</button></div>
         <header>
           <h1>Flight Log Viewer</h1>
-          <p>按 ArduPlane 控制层级组织：Flight Mode / Mission、航迹、L1、TECS、姿态/角速度、执行输出。</p>
+          <p>按控制层级查看日志、任务、参数和输出。</p>
         </header>
         <div class="metrics" id="metrics"></div>
         <div id="timeline-toolbar"></div>
@@ -793,41 +863,23 @@
         return (inspectorContext?.summary?.waypoints || []).find((waypoint) => Number(waypoint.index) === index) || null;
       }
 
-      function formatMissionCommand(row, time) {
-        if (!row) {
-          return `<p>${statusPill("missing")} 日志中没有 <code>CMD</code> 任务执行记录。</p>`;
-        }
-        const age = finite(time) && finite(Number(row.time_s)) ? Math.max(0, time - Number(row.time_s)) : null;
-        const commandNumber = Number(row.CNum);
-        const commandId = Number(row.CId);
-        const planned = plannedWaypointForCommand(commandNumber);
-        const commandLabel = `${commandName(commandId)} (#${finite(commandNumber) ? commandNumber : "?"})`;
-        const target = validGeo(Number(row.Lat), Number(row.Lng))
-          ? `${fmt.format(row.Lat)}, ${fmt.format(row.Lng)}, alt ${fmt.format(row.Alt)}`
-          : "no target lat/lon";
-        const plannedText = planned
-          ? `${planned.command_name}, lat ${fmt.format(planned.lat)}, lon ${fmt.format(planned.lon)}, alt ${fmt.format(planned.alt)}`
-          : "no matching waypoint-file row";
-        return `<div class="inspector-grid">
-          <div><strong>${escapeHtml(commandLabel)}</strong> ${statusPill("direct")}</div>
-          <div>logged at ${fmt.format(row.time_s)}s${age !== null ? `, age ${fmt.format(age)}s` : ""}</div>
-          <div>target: ${escapeHtml(target)}</div>
-          <div>params: ${["Prm1", "Prm2", "Prm3", "Prm4"].map((key) => `${key}=${fmt.format(Number(row[key]) || 0)}`).join(" | ")}</div>
-          <div>waypoint file: ${escapeHtml(plannedText)}</div>
-        </div>`;
-      }
-
-      function renderMissionAt(time) {
+      function missionInfoAt(time) {
         const mode = findModeAt(time);
         const cmdRows = inspectorContext?.groups?.mission?.messages?.CMD || [];
-        if (!mode || mode.name !== "AUTO") {
-          return `<p>${statusPill("missing")} 当前模式不是 AUTO；日志中的 mission command 只作为已加载/历史记录，不解释为当前正在执行。</p>`;
-        }
+        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive" };
         const row = previousRow(cmdRows, time);
-        if (!row || Number(row.time_s) < Number(mode.start_s) - 0.25) {
-          return `<p>${statusPill("missing")} 当前 AUTO 段内还没有可用的 CMD 执行记录。</p>`;
-        }
-        return formatMissionCommand(row, time);
+        if (!row || Number(row.time_s) < Number(mode.start_s) - 0.25) return { status: "missing", label: "no CMD", detail: "AUTO segment" };
+        const age = finite(time) && finite(Number(row.time_s)) ? Math.max(0, time - Number(row.time_s)) : null;
+        const commandNumber = Number(row.CNum);
+        const planned = plannedWaypointForCommand(commandNumber);
+        const target = validGeo(Number(row.Lat), Number(row.Lng)) ? `${fmt.format(row.Lat)}, ${fmt.format(row.Lng)}, ${fmt.format(row.Alt)}m` : `alt ${fmt.format(row.Alt)}m`;
+        return {
+          status: "direct",
+          label: `${commandName(row.CId)} #${finite(commandNumber) ? commandNumber : "?"}`,
+          detail: `${target}${age !== null ? ` | age ${fmt.format(age)}s` : ""}`,
+          planned: planned ? `${planned.command_name} #${planned.index}` : "no wp match",
+          params: ["Prm1", "Prm2", "Prm3", "Prm4"].map((key) => `${key}=${fmt.format(Number(row[key]) || 0)}`).join(" "),
+        };
       }
 
       function nearestRow(rows, time) {
@@ -909,15 +961,15 @@
 
       function renderParameterList(names) {
         const matches = parameterMatches(names);
-        if (!matches.length) return `<p>${statusPill("missing")} 当前 param 摘要中没有这些参数。</p>`;
-        return `<div class="inspector-grid">${matches.slice(0, 12).map(([key, value]) => `<div><code>${escapeHtml(key)}</code> = ${escapeHtml(value)}</div>`).join("")}${matches.length > 12 ? `<p>另有 ${matches.length - 12} 个同层参数，可在后续参数面板展开。</p>` : ""}</div>`;
+        if (!matches.length) return `<div class="mini-list">${statusPill("missing")}</div>`;
+        return `<div class="mini-list">${matches.slice(0, 8).map(([key, value]) => `<code title="${escapeHtml(key)} = ${escapeHtml(value)}">${escapeHtml(key)}=${escapeHtml(value)}</code>`).join("")}${matches.length > 8 ? `<code>+${matches.length - 8}</code>` : ""}</div>`;
       }
 
       function renderValueList(values, time) {
         return `<div class="inspector-grid">${values.map((spec) => {
           const item = sampleValue(spec, time);
-          const delta = item.delta !== undefined ? `, dt=${fmt.format(item.delta)}s` : "";
-          return `<div class="inspector-row"><strong>${escapeHtml(item.label)} ${statusPill(item.status)}</strong><span>${escapeHtml(item.value)}${item.unit ? ` ${escapeHtml(item.unit)}` : ""}</span><small>${escapeHtml(item.source)}${delta}</small></div>`;
+          const delta = item.delta !== undefined ? `dt ${fmt.format(item.delta)}s` : item.source;
+          return `<div class="inspector-row"><strong>${escapeHtml(item.label)} ${statusPill(item.status)}</strong><span>${escapeHtml(item.value)}${item.unit ? ` ${escapeHtml(item.unit)}` : ""}</span><small>${escapeHtml(delta)}</small></div>`;
         }).join("")}</div>`;
       }
 
@@ -930,15 +982,33 @@
         }
         const time = state.inspectorTime;
         if (!finite(time)) {
-          node.innerHTML = `<div class="inspector"><div class="inspector-card"><h3>Time Inspector</h3><p>点击任意时间序列图上的一个点后，这里会显示该时间点的模式、任务命令、日志值、参数值和源码公式链。</p></div></div>`;
+          node.innerHTML = `<div class="inspector"><div class="inspector-card"><div class="inspector-head"><h3>Inspector</h3></div><p>点击图像上的时间点开始检查。</p></div></div>`;
           return;
         }
         const mode = findModeAt(time);
-        const modeText = mode ? `${mode.name} (${fmt.format(mode.start_s)}s..${fmt.format(mode.end_s)}s)` : "unknown";
+        const mission = missionInfoAt(time);
+        const modeText = mode ? `${mode.name} ${fmt.format(mode.start_s)}..${fmt.format(mode.end_s)}s` : "unknown";
         node.innerHTML = `<div class="inspector">
-          <div class="inspector-card"><h3>Time Inspector</h3><p>t = <strong>${fmt.format(time)}s</strong><br>mode = <strong>${escapeHtml(modeText)}</strong></p><h3>Mission command</h3>${renderMissionAt(time)}<p>${statusPill("direct")} 日志直接值 ${statusPill("derived")} 前端重建值 ${statusPill("missing")} 日志或参数缺失</p></div>
-          ${controlChains.map((chain) => `<div class="inspector-card"><h3>${escapeHtml(chain.title)}</h3><p>${escapeHtml(chain.formula)}</p><p><small>source: ${escapeHtml(chain.source)}</small></p><h3>Variables</h3>${renderValueList(chain.values, time)}<h3>Parameters</h3>${renderParameterList(chain.params)}</div>`).join("")}
+          <div class="inspector-card">
+            <div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button id="clear-inspect-inline">Clear inspect</button></div></div>
+            <div class="kv-grid">
+              <div class="kv"><span>time</span><strong>${fmt.format(time)}s</strong></div>
+              <div class="kv"><span>mode</span><strong>${escapeHtml(modeText)}</strong></div>
+              <div class="kv"><span>mission</span><strong>${escapeHtml(mission.label)} ${statusPill(mission.status)}</strong></div>
+              <div class="kv"><span>target</span><strong title="${escapeHtml(mission.params || "")}">${escapeHtml(mission.detail || "")}</strong></div>
+            </div>
+          </div>
+          ${controlChains.map((chain) => `<div class="inspector-card"><div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3></div>${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>`).join("")}
         </div>`;
+        document.querySelector("#clear-inspect-inline")?.addEventListener("click", clearInspect);
+      }
+
+      function clearInspect() {
+        state.inspectorTime = null;
+        state.pinned = {};
+        state.hover = {};
+        renderInspector();
+        renderAllCharts();
       }
 
       function setInspectorTime(time) {
@@ -1074,14 +1144,15 @@
           <div class="mode-buttons" id="mode-buttons"></div>
           <div class="chart-actions">
             <button id="zoom-out">Zoom out</button>
+            <button id="clear-inspect">Clear inspect</button>
             <button id="clear-pins">Clear readouts</button>
             <button id="clear-time-refs">Clear T refs</button>
-            <span class="range-text">轴边操作：左侧 Y 轴边拖出横向线；底部时间轴边拖出全局竖线。</span>
           </div>
         </div>`;
         renderModeButtons();
         updateRangeText("all");
         document.querySelector("#zoom-out").addEventListener("click", () => focusMode("all"));
+        document.querySelector("#clear-inspect").addEventListener("click", clearInspect);
         document.querySelector("#clear-pins").addEventListener("click", () => {
           state.pinned = {};
           renderAllCharts();
@@ -2087,7 +2158,7 @@
           layer(
             0,
             "Flight Mode / Mission",
-            "模式层先决定控制权和上层目标；后续所有控制解释都必须先按模式分段，尤其关注 AUTO 段。",
+            "模式、任务命令、关键消息。",
             chartPanel("alt-chart", true),
             `<h3>Mode segments</h3>${table(modeRows, [
               { key: "time_s", label: "change_s", format: (v) => fmt.format(v) },
@@ -2108,7 +2179,7 @@
           layer(
             1,
             "Track / Geometry",
-            "航迹层展示当前时间窗口内的实际路径和任务航点；它为 L1 横向制导提供误差来源。",
+            "当前时间窗口航迹和航点。",
             chartPanel("track-chart"),
             `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
@@ -2121,44 +2192,44 @@
           layer(
             2,
             "L1 Navigation",
-            "L1 横向制导把航点几何和横航迹误差转为目标滚转；不要把这层问题直接归因于 Rate PID。",
+            "横向误差、目标滚转、实际滚转。",
             chartPanel("l1-chart"),
-            `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div><p>参数面板后续应关联 <code>NAVL1_PERIOD</code>、<code>NAVL1_DAMPING</code>、<code>NAVL1_XTRACK_I</code>。</p>`,
+            `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div>`,
           ),
           layer(
             3,
             "TECS Energy",
-            "TECS 纵向能量层处理高度、速度、俯仰和油门分配；它不是普通高度 PID。",
+            "高度、速度、俯仰、油门需求。",
             chartPanel("tecs-chart"),
-            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div><p>这份日志里 TECS 是低频记录，缩放分析时要注意采样率低于 ATT/CTUN/PID。</p>`,
+            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div>`,
           ),
           layer(
             4,
             "Attitude / Rate",
-            "姿态外环把目标 Roll/Pitch 转为目标角速度，Rate PID 再转成舵面需求；Yaw 路径需结合模式和源码单独判断。",
+            "姿态目标、实际姿态、Rate PID。",
             `${chartPanel("att-chart")}<div style="height:12px"></div>${chartPanel("pid-chart", true)}`,
-            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div><p><code>PIDY</code> 有数据不代表普通 AUTO/STABILIZE 一定走直接 Yaw Rate 控制，仍需结合模式和源码路径解释。</p>`,
+            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div>`,
           ),
           layer(
             5,
             "Motion / IMU",
-            "惯性层集中查看机体加速度、角速度、振动和 EKF 速度/状态；判断飞机加速度优先看 IMU.AccX/AccY/AccZ。",
+            "IMU 加速度、角速度、振动、EKF 速度。",
             chartPanel("motion-chart"),
-            `<h3>Motion records</h3><div class="note">IMU ${motion.messages.IMU.length}<br>VIBE ${motion.messages.VIBE.length}<br>XKF1 ${motion.messages.XKF1.length}<br>XKF2 ${motion.messages.XKF2.length}<br>RATE ${motion.messages.RATE.length}</div><p><code>IMU.AccX/AccY/AccZ</code> 是最直接的三轴加速度字段；<code>VIBE</code> 用来看振动/削波，<code>XKF1</code> 是 EKF 估计速度。</p>`,
+            `<h3>Motion records</h3><div class="note">IMU ${motion.messages.IMU.length}<br>VIBE ${motion.messages.VIBE.length}<br>XKF1 ${motion.messages.XKF1.length}<br>XKF2 ${motion.messages.XKF2.length}<br>RATE ${motion.messages.RATE.length}</div>`,
           ),
           layer(
             6,
             "I/O Outputs",
-            "执行层展示 RC 输入和 SRV 输出；这是控制链末端，用来验证上层需求是否导致舵面/油门动作。",
+            "RC 输入和 PWM 输出。",
             chartPanel("io-chart"),
-            `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div><p>通道语义后续应结合 <code>SERVO*_FUNCTION</code> 参数映射，而不是固定假设 C1/C2/C3/C4。</p>`,
+            `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div>`,
           ),
           layer(
             7,
             "Custom Data",
-            "自定义图表用于临时检查任意已解析消息字段；适合在进入固定参数分析面板前做探索。",
+            "任意消息字段临时绘图。",
             chartPanel("custom-chart"),
-            `<div class="custom-controls"><h3>Build custom chart</h3><label>Message<select id="custom-message"></select></label><label>Numeric field<select id="custom-field"></select></label><button id="custom-add">Add curve</button><button id="custom-clear">Clear custom chart</button><p>曲线加入后会跟随共享时间轴、模式竖线、全局 T 参考线和本图 Y 参考线。</p></div>`,
+            `<div class="custom-controls"><h3>Build custom chart</h3><label>Message<select id="custom-message"></select></label><label>Numeric field<select id="custom-field"></select></label><button id="custom-add">Add curve</button><button id="custom-clear">Clear custom chart</button></div>`,
           ),
         ].join("");
 
