@@ -108,6 +108,18 @@ Changes for this pass:
 - Keep both controls in the left global toolbar so they are available without opening chart layers.
 - Font scaling should update layout and canvases immediately after switching.
 
+
+## Text scrolling and inspector item collapse plan
+
+Goal: keep dense text readable without forcing the whole tablet layout to expand.
+
+Changes for this pass:
+
+- Each Inspector control-chain card gets its own hide/show toggle independent of the overall Inspector toggle.
+- Chain collapse state is preserved while selecting new inspect times.
+- Text-heavy UI containers use horizontal and vertical overflow scrolling where content can exceed the available area.
+- Tables and small value labels prefer contained scrolling over pushing chart widths or panel widths wider.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.

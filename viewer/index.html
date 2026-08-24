@@ -322,6 +322,33 @@
         display: none;
       }
 
+      header,
+      .toolbar,
+      .metric,
+      .notice,
+      .note,
+      .readout,
+      .inspector-card,
+      .layer-head,
+      td,
+      th {
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      header { max-height: 150px; }
+      .toolbar { max-height: 260px; }
+      .metric { max-height: 84px; }
+      .note { max-height: 210px; }
+      .layer-head { max-height: 130px; }
+      .readout { max-height: 140px; }
+
+      td,
+      th {
+        max-width: 220px;
+        white-space: nowrap;
+      }
+
       .legend {
         display: flex;
         flex-wrap: wrap;
@@ -457,9 +484,11 @@
 
       .mini-list {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 5px;
         margin-top: 7px;
+        overflow: auto;
+        scrollbar-width: thin;
       }
 
       .mini-list code {
@@ -468,6 +497,32 @@
 
       .inspector-collapsed .inspector-body {
         display: none;
+      }
+
+      .inspector-card.chain-collapsed .chain-body {
+        display: none;
+      }
+
+      .chain-body {
+        max-height: 360px;
+        overflow: auto;
+        padding-top: 8px;
+        scrollbar-width: thin;
+      }
+
+      .inspector-row strong,
+      .inspector-row span,
+      .inspector-row small,
+      .kv strong,
+      .mini-list {
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      .inspector-row strong,
+      .inspector-row span,
+      .inspector-row small {
+        white-space: nowrap;
       }
 
       .status-pill {
@@ -700,6 +755,7 @@
         highlightedWaypointIndex: null,
         inspectorTime: null,
         inspectorCollapsed: false,
+        inspectorChainCollapsed: {},
         fontScale: "normal",
         dragging: null,
         pinch: null,
@@ -993,10 +1049,34 @@
         return state.inspectorCollapsed ? "Show" : "Hide";
       }
 
+      function inspectorChainKey(index) {
+        return `chain-${index}`;
+      }
+
+      function inspectorChainToggleLabel(index) {
+        return state.inspectorChainCollapsed[inspectorChainKey(index)] ? "Show" : "Hide";
+      }
+
+      function renderInspectorChain(chain, index, time) {
+        const key = inspectorChainKey(index);
+        const collapsed = state.inspectorChainCollapsed[key];
+        return `<div class="inspector-card ${collapsed ? "chain-collapsed" : ""}">
+          <div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3><div class="inspector-actions"><button data-toggle-inspector-chain="${key}">${inspectorChainToggleLabel(index)}</button></div></div>
+          <div class="chain-body">${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>
+        </div>`;
+      }
+
       function bindInspectorButtons() {
         document.querySelectorAll("[data-toggle-inspector]").forEach((button) => {
           button.addEventListener("click", () => {
             state.inspectorCollapsed = !state.inspectorCollapsed;
+            renderInspector();
+          });
+        });
+        document.querySelectorAll("[data-toggle-inspector-chain]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const key = button.dataset.toggleInspectorChain;
+            state.inspectorChainCollapsed[key] = !state.inspectorChainCollapsed[key];
             renderInspector();
           });
         });
@@ -1049,7 +1129,7 @@
               <div class="kv"><span>target</span><strong title="${escapeHtml(mission.params || "")}">${escapeHtml(mission.detail || "")}</strong></div>
             </div></div>
           </div>
-          <div class="inspector-body">${controlChains.map((chain) => `<div class="inspector-card"><div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3></div>${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>`).join("")}</div>
+          <div class="inspector-body">${controlChains.map((chain, index) => renderInspectorChain(chain, index, time)).join("")}</div>
         </div>`;
         bindInspectorButtons();
       }
