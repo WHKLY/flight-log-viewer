@@ -191,7 +191,6 @@ def main() -> int:
             "rlogs": [path.name for path in sorted(files) if path.suffix.lower() == ".rlog"],
         },
         "duplicate_groups": duplicate_groups(files),
-        "params": params,
         "control_params": control_params,
         "waypoints": waypoints,
     }

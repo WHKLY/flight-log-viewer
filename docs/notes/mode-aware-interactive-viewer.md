@@ -132,19 +132,6 @@ Changes for this pass:
 - Render compact parameter cards in layer side panels using current `.param` values from `dataset-summary.json`.
 - Keep long parameter names and values horizontally scrollable inside cards.
 
-
-## Parameter search panel plan
-
-Goal: make parameter lookup fast while reading charts on the tablet.
-
-Changes for this pass:
-
-- Include the full `.param` dictionary in `dataset-summary.json`; keep `control_params` as the highlighted subset.
-- Add a compact parameter search card in the left control panel.
-- Search should match parameter name, value, layer label, and short role text.
-- Results stay inside a scrollable container and must not widen the left sidebar.
-- Known layer parameters should show their layer and role; unknown parameters still appear with value only.
-
 ## Next direction
 
-The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.
+The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
