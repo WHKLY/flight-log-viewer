@@ -216,6 +216,7 @@
 
       .notice,
       .toolbar,
+      .param-search,
       .inspector {
         background: rgba(255, 255, 255, 0.88);
         border: 1px solid var(--line);
@@ -225,9 +226,52 @@
         padding: 12px;
       }
 
-      .toolbar {
+      .toolbar,
+      .param-search {
         display: grid;
         gap: 10px;
+      }
+
+      .param-search input {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink);
+        font: inherit;
+        min-width: 0;
+        padding: 7px 10px;
+        width: 100%;
+      }
+
+      .param-results {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 5px;
+        max-height: 240px;
+        overflow: auto;
+        padding: 7px;
+        scrollbar-width: thin;
+      }
+
+      .param-search-row {
+        display: grid;
+        gap: 4px;
+        grid-template-columns: minmax(110px, 0.9fr) minmax(0, 1.1fr);
+        min-width: 340px;
+      }
+
+      .param-search-row code,
+      .param-search-row span,
+      .param-search-row small {
+        overflow: auto;
+        scrollbar-width: thin;
+        white-space: nowrap;
+      }
+
+      .param-search-row small {
+        color: var(--muted);
+        grid-column: 1 / -1;
       }
 
       .toolbar-row,
@@ -336,6 +380,7 @@
 
       header,
       .toolbar,
+      .param-search,
       .metric,
       .notice,
       .note,
@@ -736,6 +781,7 @@
           <p>按控制层级查看日志、任务、参数和输出。</p>
         </header>
         <div class="metrics" id="metrics"></div>
+        <div id="param-search"></div>
         <div id="timeline-toolbar"></div>
         <div id="time-inspector"></div>
       </aside>
@@ -794,6 +840,7 @@
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
         fontScale: "normal",
+        paramQuery: "",
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -822,6 +869,7 @@
           files: [],
           selected_files: { param: null, waypoints: null, bin_logs: [], tlogs: [], rlogs: [] },
           duplicate_groups: {},
+          params: {},
           control_params: {},
           waypoints: [],
         };
@@ -1123,6 +1171,58 @@
           }
         }
         return found;
+      }
+
+      function parameterRoleIndex() {
+        const index = {};
+        for (const [layerKey, rows] of Object.entries(layerParameterMap)) {
+          for (const [name, role] of rows) {
+            index[name] = { layerKey, role };
+          }
+        }
+        return index;
+      }
+
+      function parameterEntries(summary) {
+        const params = summary.params || summary.control_params || {};
+        const controlParams = summary.control_params || {};
+        const roleIndex = parameterRoleIndex();
+        return Object.keys(params).sort().map((name) => ({
+          name,
+          value: params[name],
+          isControl: Object.prototype.hasOwnProperty.call(controlParams, name),
+          layer: roleIndex[name]?.layerKey || "",
+          role: roleIndex[name]?.role || "",
+        }));
+      }
+
+      function filteredParameterEntries(summary) {
+        const query = state.paramQuery.trim().toLowerCase();
+        const entries = parameterEntries(summary);
+        if (!query) return entries.filter((entry) => entry.isControl || entry.layer).slice(0, 40);
+        return entries.filter((entry) => [entry.name, entry.value, entry.layer, entry.role].some((value) => String(value || "").toLowerCase().includes(query))).slice(0, 80);
+      }
+
+      function renderParamSearchResults(summary) {
+        const entries = filteredParameterEntries(summary);
+        if (!entries.length) return `<p>No params.</p>`;
+        return entries.map((entry) => `<div class="param-search-row"><code title="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</code><span title="${escapeHtml(entry.value)}">${escapeHtml(entry.value)}</span><small>${escapeHtml(entry.layer || "param")}${entry.role ? ` · ${escapeHtml(entry.role)}` : ""}${entry.isControl ? " · control" : ""}</small></div>`).join("");
+      }
+
+      function renderParamSearch(summary) {
+        const total = Object.keys(summary.params || summary.control_params || {}).length;
+        const shown = filteredParameterEntries(summary).length;
+        const node = document.querySelector("#param-search");
+        if (!node) return;
+        node.innerHTML = `<div class="param-search"><div class="toolbar-row"><strong>Param Search</strong><span class="range-text">${shown}/${total}</span></div><input id="param-query" value="${escapeHtml(state.paramQuery)}" placeholder="NAVL1 / TECS / SERVO / INS"><div class="param-results" id="param-results">${renderParamSearchResults(summary)}</div></div>`;
+        const input = document.querySelector("#param-query");
+        input?.addEventListener("input", () => {
+          state.paramQuery = input.value;
+          const results = document.querySelector("#param-results");
+          if (results) results.innerHTML = renderParamSearchResults(summary);
+          const count = document.querySelector("#param-search .range-text");
+          if (count) count.textContent = `${filteredParameterEntries(summary).length}/${total}`;
+        });
       }
 
       function renderLayerParams(summary, layerKey) {
@@ -2373,6 +2473,7 @@
           metric("Waypoints", summary.counts?.waypoints ?? 0),
         ].join("");
 
+        renderParamSearch(summary);
         renderToolbar();
         document.querySelector("#toggle-controls")?.addEventListener("click", () => {
           const root = document.querySelector("main");
