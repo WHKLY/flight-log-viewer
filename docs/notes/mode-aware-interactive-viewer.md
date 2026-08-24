@@ -35,6 +35,7 @@ Date: 2026-08-23
 - `extract_dataflash_series.py` writes empty series and manifest output when no `.BIN` file is present, so waypoint-only or parameter-only packages can still be opened after `summarize_dataset.py` runs.
 - The Track layer now includes a lightweight 3D Flight Path canvas using POS altitude and nearest ATT attitude; it supports drag rotation, wheel/pinch zoom, Reset 3D, shared time-window filtering, waypoint highlighting, and a simple nose/right/up attitude triad.
 - The Track layer now has local time controls: path display can switch between the shared window and full flight, while the aircraft marker uses an independent selected time. The 3D view now supports pan on desktop and tablet, and the displayed roll sign is corrected.
+- Track time controls now sit between the 2D and 3D track canvases, include a Track-specific flight-mode filter, allow the aircraft marker slider to use either the current window or full flight, and the 3D marker is drawn as a simple aircraft model instead of only a triad.
 
 ## Current sample
 
@@ -157,6 +158,17 @@ Changes for this pass:
 - Apply the path display mode consistently to both 2D track and 3D track.
 - Correct the roll sign used by the simple aircraft attitude triad.
 - Add 3D pan: desktop Shift-drag/right-drag pans, normal drag rotates, wheel zooms; tablet two-finger gesture pans and zooms together.
+
+## Track timeline and aircraft model v3 plan
+
+Goal: make the Track layer controls physically close to the 2D/3D views and separate path time, marker time, and flight-mode filtering.
+
+Changes for this pass:
+
+- Move Track time controls between the 2D track and 3D track canvases.
+- Add a Track-specific flight-mode filter that applies to the displayed path and the aircraft marker slider range without changing the global shared timeline.
+- Add a marker time scope selector so the aircraft time slider can operate over the current global window or the whole loaded flight.
+- Replace the simple 3D attitude triad with a small stylized aircraft model while keeping colored nose/right/up cues for debugging attitude direction.
 
 ## Next direction
 

@@ -445,8 +445,21 @@
         gap: 8px;
       }
 
-      .track-controls .mode-buttons {
+      .track-controls {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        margin: 12px 0;
+        padding: 10px;
+      }
+
+      .track-controls .mode-buttons,
+      .track-controls .chart-actions {
         gap: 6px;
+        max-height: 92px;
+        overflow: auto;
+        scrollbar-width: thin;
       }
 
       .inspector {
@@ -808,6 +821,8 @@
         timeRefs: [],
         highlightedWaypointIndex: null,
         trackPathMode: "window",
+        trackModeFilter: "all",
+        trackMarkerScope: "window",
         trackMarkerTime: null,
         inspectorTime: null,
         inspectorCollapsed: false,
@@ -1402,48 +1417,98 @@
         return state.trackPathMode === "full" ? state.fullRange : state.range;
       }
 
+      function trackModeNames() {
+        return ["all", ...new Set((modeData.segments || []).map((segment) => segment.name).filter(Boolean))];
+      }
+
+      function selectedTrackSegments(baseRange = trackPathRange()) {
+        if (state.trackModeFilter === "all") return [{ start_s: baseRange.start, end_s: baseRange.end, name: "all" }];
+        return (modeData.segments || [])
+          .filter((segment) => segment.name === state.trackModeFilter && segment.end_s >= baseRange.start && segment.start_s <= baseRange.end)
+          .map((segment) => ({ ...segment, start_s: Math.max(segment.start_s, baseRange.start), end_s: Math.min(segment.end_s, baseRange.end) }));
+      }
+
+      function trackTimeAllowed(time, baseRange = trackPathRange()) {
+        if (!finite(time) || time < baseRange.start || time > baseRange.end) return false;
+        if (state.trackModeFilter === "all") return true;
+        return selectedTrackSegments(baseRange).some((segment) => time >= segment.start_s && time <= segment.end_s);
+      }
+
+      function filterTrackPoints(points, baseRange = trackPathRange()) {
+        return points.filter((point) => point.kind === "pos" && trackTimeAllowed(point.time_s, baseRange));
+      }
+
+      function trackMarkerBounds() {
+        const base = state.trackMarkerScope === "full" ? state.fullRange : state.range;
+        const segments = selectedTrackSegments(base);
+        if (state.trackModeFilter === "all" || !segments.length) return { start: base.start, end: base.end };
+        return {
+          start: Math.min(...segments.map((segment) => segment.start_s)),
+          end: Math.max(...segments.map((segment) => segment.end_s)),
+        };
+      }
+
       function trackMarkerTime() {
-        const fallback = finite(state.range.end) ? state.range.end : state.fullRange.start;
+        const bounds = trackMarkerBounds();
+        const fallback = finite(state.range.end) ? state.range.end : bounds.start;
         const value = finite(state.trackMarkerTime) ? state.trackMarkerTime : fallback;
-        return clamp(value, state.fullRange.start, state.fullRange.end);
+        return clamp(value, bounds.start, bounds.end);
       }
 
       function setTrackMarkerTime(time) {
-        state.trackMarkerTime = clamp(Number(time), state.fullRange.start, state.fullRange.end);
+        const bounds = trackMarkerBounds();
+        state.trackMarkerTime = clamp(Number(time), bounds.start, bounds.end);
         updateTrackControls();
         renderAllCharts();
       }
 
       function trackControlsHtml() {
-        const start = state.fullRange.start;
-        const end = state.fullRange.end;
-        const span = Math.max(end - start, 1);
+        const bounds = trackMarkerBounds();
+        const span = Math.max(bounds.end - bounds.start, 1);
         const step = Math.max(span / 1200, 0.02);
-        return `<h3>Track time</h3><div class="track-controls">
+        const modeButtons = trackModeNames().map((name) => `<button class="${state.trackModeFilter === name ? "active" : ""}" data-track-mode-filter="${escapeHtml(name)}">${name === "all" ? "All modes" : escapeHtml(name)}</button>`).join("");
+        return `<div class="track-controls">
+          <div class="toolbar-row"><strong>Track time</strong><span class="range-text" id="track-path-text"></span></div>
           <div class="mode-buttons">
             <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Window path</button>
             <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Full path</button>
           </div>
-          <label>Plane time <span class="range-text" id="track-marker-text"></span><input id="track-marker-time" type="range" min="${start}" max="${end}" step="${step}" value="${trackMarkerTime()}"></label>
+          <div class="mode-buttons">${modeButtons}</div>
           <div class="chart-actions">
-            <button id="track-marker-window-end">At window end</button>
+            <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Slider: window</button>
+            <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Slider: full</button>
+          </div>
+          <label>Plane time <span class="range-text" id="track-marker-text"></span><input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
+          <div class="chart-actions">
+            <button id="track-marker-path-end">At path end</button>
             <button id="track-marker-inspect">At inspect</button>
           </div>
-          <div class="range-text" id="track-path-text"></div>
         </div>`;
       }
 
       function updateTrackControls() {
-        const slider = document.querySelector("#track-marker-time");
+        const bounds = trackMarkerBounds();
         const marker = trackMarkerTime();
-        if (slider && document.activeElement !== slider) slider.value = marker;
+        const slider = document.querySelector("#track-marker-time");
+        if (slider) {
+          slider.min = bounds.start;
+          slider.max = bounds.end;
+          slider.step = Math.max((bounds.end - bounds.start) / 1200, 0.02);
+          if (document.activeElement !== slider) slider.value = marker;
+        }
         const markerText = document.querySelector("#track-marker-text");
-        if (markerText) markerText.textContent = `${fmt.format(marker)}s`;
+        if (markerText) markerText.textContent = `${fmt.format(marker)}s | ${fmt.format(bounds.start)}s..${fmt.format(bounds.end)}s`;
         const pathRange = trackPathRange();
         const pathText = document.querySelector("#track-path-text");
-        if (pathText) pathText.textContent = `${state.trackPathMode === "full" ? "Full" : "Window"}: ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s`;
+        if (pathText) pathText.textContent = `${state.trackPathMode === "full" ? "Full" : "Window"}: ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter}`;
         document.querySelectorAll("[data-track-path-mode]").forEach((button) => {
           button.classList.toggle("active", button.dataset.trackPathMode === state.trackPathMode);
+        });
+        document.querySelectorAll("[data-track-mode-filter]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.trackModeFilter === state.trackModeFilter);
+        });
+        document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.trackMarkerScope === state.trackMarkerScope);
         });
       }
 
@@ -1455,8 +1520,20 @@
             renderAllCharts();
           });
         });
+        document.querySelectorAll("[data-track-mode-filter]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.trackModeFilter = button.dataset.trackModeFilter;
+            setTrackMarkerTime(trackMarkerTime());
+          });
+        });
+        document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.trackMarkerScope = button.dataset.trackMarkerScope;
+            setTrackMarkerTime(trackMarkerTime());
+          });
+        });
         document.querySelector("#track-marker-time")?.addEventListener("input", (event) => setTrackMarkerTime(event.target.value));
-        document.querySelector("#track-marker-window-end")?.addEventListener("click", () => setTrackMarkerTime(state.range.end));
+        document.querySelector("#track-marker-path-end")?.addEventListener("click", () => setTrackMarkerTime(trackPathRange().end));
         document.querySelector("#track-marker-inspect")?.addEventListener("click", () => {
           if (finite(state.inspectorTime)) setTrackMarkerTime(state.inspectorTime);
         });
@@ -1971,7 +2048,7 @@
       function ensureTrack3dView(config, width, height) {
         const points = projectTrack3d(config).filter((point) => point.kind === "pos");
         const pathRange = trackPathRange();
-        const visible = points.filter((point) => point.time_s >= pathRange.start && point.time_s <= pathRange.end);
+        const visible = filterTrackPoints(points, pathRange);
         const fit = bounds3d(visible.length ? visible : points);
         config.center3d = fit;
         config.view ||= { ...state.track3dView };
@@ -2052,29 +2129,89 @@
         return { forward, right, up };
       }
 
-      function drawAircraftTriad(ctx, basePoint, attitudeRow, config, plot, size) {
+      function aircraftPoint(basePoint, vectors, forward, right, up) {
+        return {
+          x: basePoint.x + vectors.forward * forward[0] + vectors.right * right[0] + vectors.up * up[0],
+          y: basePoint.y + vectors.forward * forward[1] + vectors.right * right[1] + vectors.up * up[1],
+          z: basePoint.z + vectors.forward * forward[2] + vectors.right * right[2] + vectors.up * up[2],
+        };
+      }
+
+      function drawAircraftModel(ctx, basePoint, attitudeRow, config, plot, size) {
         const attitude = attitudeVector(attitudeRow);
-        const base = track3dProject(basePoint, config, plot);
-        const axes = [
+        const body = {
+          nose: aircraftPoint(basePoint, { forward: size * 1.35, right: 0, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          tail: aircraftPoint(basePoint, { forward: -size * 0.9, right: 0, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          leftWing: aircraftPoint(basePoint, { forward: -size * 0.08, right: -size * 0.95, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          rightWing: aircraftPoint(basePoint, { forward: -size * 0.08, right: size * 0.95, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          tailLeft: aircraftPoint(basePoint, { forward: -size * 0.72, right: -size * 0.38, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          tailRight: aircraftPoint(basePoint, { forward: -size * 0.72, right: size * 0.38, up: 0 }, attitude.forward, attitude.right, attitude.up),
+          fin: aircraftPoint(basePoint, { forward: -size * 0.78, right: 0, up: size * 0.42 }, attitude.forward, attitude.right, attitude.up),
+        };
+        const screen = Object.fromEntries(Object.entries(body).map(([name, point]) => [name, track3dProject(point, config, plot)]));
+        const center = track3dProject(basePoint, config, plot);
+
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.fillStyle = "rgba(18, 128, 106, 0.28)";
+        ctx.strokeStyle = colors.teal;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.nose.x, screen.nose.y);
+        ctx.lineTo(screen.leftWing.x, screen.leftWing.y);
+        ctx.lineTo(screen.tail.x, screen.tail.y);
+        ctx.lineTo(screen.rightWing.x, screen.rightWing.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = colors.blue;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screen.tail.x, screen.tail.y);
+        ctx.lineTo(screen.nose.x, screen.nose.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = colors.red;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(screen.leftWing.x, screen.leftWing.y);
+        ctx.lineTo(screen.rightWing.x, screen.rightWing.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = colors.gold;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(screen.tailLeft.x, screen.tailLeft.y);
+        ctx.lineTo(screen.tailRight.x, screen.tailRight.y);
+        ctx.moveTo(screen.tail.x, screen.tail.y);
+        ctx.lineTo(screen.fin.x, screen.fin.y);
+        ctx.stroke();
+
+        const cues = [
           { vector: attitude.forward, color: colors.blue, label: "nose" },
           { vector: attitude.right, color: colors.red, label: "right" },
           { vector: attitude.up, color: colors.gold, label: "up" },
         ];
-        ctx.lineWidth = 3;
-        axes.forEach((axis) => {
-          const tip = track3dProject({ x: basePoint.x + axis.vector[0] * size, y: basePoint.y + axis.vector[1] * size, z: basePoint.z + axis.vector[2] * size }, config, plot);
-          ctx.strokeStyle = axis.color;
+        ctx.font = canvasFont(11);
+        cues.forEach((cue) => {
+          const tip = track3dProject({ x: basePoint.x + cue.vector[0] * size * 0.72, y: basePoint.y + cue.vector[1] * size * 0.72, z: basePoint.z + cue.vector[2] * size * 0.72 }, config, plot);
+          ctx.strokeStyle = cue.color;
+          ctx.lineWidth = 1.8;
           ctx.beginPath();
-          ctx.moveTo(base.x, base.y);
+          ctx.moveTo(center.x, center.y);
           ctx.lineTo(tip.x, tip.y);
           ctx.stroke();
-          ctx.fillStyle = axis.color;
-          ctx.fillText(axis.label, tip.x + 4, tip.y - 4);
+          ctx.fillStyle = cue.color;
+          ctx.fillText(cue.label, tip.x + 4, tip.y - 4);
         });
+
         ctx.fillStyle = colors.teal;
         ctx.beginPath();
-        ctx.arc(base.x, base.y, 5, 0, Math.PI * 2);
+        ctx.arc(center.x, center.y, 4, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
       }
 
       function drawTrack3dChart(config) {
@@ -2095,11 +2232,12 @@
 
         const projected = projectTrack3d(config);
         const pathRange = trackPathRange();
-        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= pathRange.start && point.time_s <= pathRange.end);
+        const posPoints = filterTrackPoints(projected, pathRange);
         const allPos = projected.filter((point) => point.kind === "pos");
         const wpPoints = projected.filter((point) => point.kind === "wp");
         const markerTime = trackMarkerTime();
-        const current = (nearestRow(allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
+        const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
+        const current = (nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
         const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
         const size = Math.max(20, (config.center3d?.radius || 80) * 0.15);
 
@@ -2154,14 +2292,14 @@
           ctx.fillText(`#${highlighted.row.index}`, screen.x + 12, screen.y - 8);
         }
 
-        if (current && attitude) drawAircraftTriad(ctx, current, attitude, config, plot, size);
+        if (current && attitude) drawAircraftModel(ctx, current, attitude, config, plot, size);
         ctx.restore();
 
         ctx.fillStyle = "#607068";
         ctx.font = canvasFont(12);
         ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
         const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
       }
 
       function drawTrackChart(config) {
@@ -2181,10 +2319,11 @@
 
         const projected = projectTrack(config);
         const pathRange = trackPathRange();
-        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= pathRange.start && point.time_s <= pathRange.end);
+        const posPoints = filterTrackPoints(projected, pathRange);
         const allPos = projected.filter((point) => point.kind === "pos");
         const markerTime = trackMarkerTime();
-        const markerPoint = nearestRow(allPos, markerTime)?.row || null;
+        const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
+        const markerPoint = nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row || null;
         const wpPoints = projected.filter((point) => point.kind === "wp");
         const omittedWaypoints = config.omittedWaypoints || 0;
         const sx = (x) => plot.left + plot.width / 2 + (x - config.mapView.cx) / config.mapView.metersPerPx;
@@ -2270,7 +2409,7 @@
         ctx.fillStyle = "#607068";
         ctx.font = canvasFont(12);
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -2835,8 +2974,8 @@
             1,
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
-            `${chartPanel("track-chart")}<div style="height:12px"></div>${chartPanel("track-3d-chart")}`,
-            `${trackControlsHtml()}<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。姿态符号：nose 蓝，right 红，up 金。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
