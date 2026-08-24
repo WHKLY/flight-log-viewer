@@ -33,6 +33,7 @@ Date: 2026-08-23
 - All extracted inertial/EKF numeric fields are also available in the Custom Data layer for ad-hoc plotting without adding more fixed panels.
 - Missing generated JSON files no longer block the whole viewer; absent groups fall back to empty data and the compatibility panel lists what is missing.
 - `extract_dataflash_series.py` writes empty series and manifest output when no `.BIN` file is present, so waypoint-only or parameter-only packages can still be opened after `summarize_dataset.py` runs.
+- The Track layer now includes a lightweight 3D Flight Path canvas using POS altitude and nearest ATT attitude; it supports drag rotation, wheel/pinch zoom, Reset 3D, shared time-window filtering, waypoint highlighting, and a simple nose/right/up attitude triad.
 
 ## Current sample
 
@@ -132,6 +133,18 @@ Changes for this pass:
 - Render compact parameter cards in layer side panels using current `.param` values from `dataset-summary.json`.
 - Keep long parameter names and values horizontally scrollable inside cards.
 
+## 3D flight path viewer plan
+
+Goal: add a tablet-friendly 3D view of the aircraft path without introducing a heavy dependency in the first pass.
+
+Changes for this pass:
+
+- Add a 3D Flight Path canvas in the Track layer, sharing the same global time window as the 2D track and charts.
+- Reuse existing POS latitude/longitude projection and altitude fields to build local-meter `x/y/z` points.
+- Use ATT `Roll/Pitch/Yaw` near the current inspect time, or the visible segment end when no inspect time is selected, to draw a simple aircraft attitude triad.
+- Support direct drag rotation, wheel/pinch zoom, and reset view for tablet operation.
+- Keep this as a lightweight Canvas projection first; later versions may replace the aircraft marker with a richer WebGL model if the interaction and data mapping prove useful.
+
 ## Next direction
 
-The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
+The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

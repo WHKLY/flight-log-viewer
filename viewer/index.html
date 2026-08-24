@@ -316,6 +316,10 @@
         height: 310px;
       }
 
+      #track-3d-chart {
+        height: 460px;
+      }
+
       .readout {
         background: rgba(255, 255, 255, 0.94);
         border: 1px solid var(--line);
@@ -794,6 +798,7 @@
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
         fontScale: "normal",
+        track3dView: { yaw: -0.72, pitch: -0.55, scale: null, userScaled: false },
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -1836,6 +1841,241 @@
         config.mapView.cy = beforeY + (anchorY - (plot.top + plot.height / 2)) * config.mapView.metersPerPx;
       }
 
+      function altitudeValue(row) {
+        for (const key of ["RelHomeAlt", "Alt", "AMSL", "RAlt", "AltAMSL"]) {
+          const value = Number(row?.[key]);
+          if (finite(value)) return { value, key };
+        }
+        return { value: 0, key: "missing" };
+      }
+
+      function projectTrack3d(config) {
+        if (config.projected3d) return config.projected3d;
+        const projected = projectTrack(config);
+        const posRaw = projected.filter((point) => point.kind === "pos");
+        const altSamples = posRaw.map((point) => altitudeValue(point.row)).filter((item) => finite(item.value));
+        const usesRelative = altSamples.some((item) => item.key === "RelHomeAlt" || item.key === "RAlt");
+        const refAlt = usesRelative ? 0 : (altSamples[0]?.value ?? 0);
+        const to3d = (point) => {
+          const alt = point.kind === "wp" ? Number(point.row?.alt) : altitudeValue(point.row).value;
+          const z = finite(alt) ? alt - refAlt : 0;
+          return { ...point, z };
+        };
+        config.projected3d = projected.map(to3d);
+        config.altitudeSource = altSamples.find((item) => item.key !== "missing")?.key || "missing";
+        return config.projected3d;
+      }
+
+      function bounds3d(points) {
+        if (!points.length) return { cx: 0, cy: 0, cz: 0, radius: 80 };
+        const xs = points.map((point) => point.x);
+        const ys = points.map((point) => point.y);
+        const zs = points.map((point) => point.z);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const minZ = Math.min(...zs);
+        const maxZ = Math.max(...zs);
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        const cz = (minZ + maxZ) / 2;
+        const radius = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 80) / 2;
+        return { cx, cy, cz, radius };
+      }
+
+      function ensureTrack3dView(config, width, height) {
+        const points = projectTrack3d(config).filter((point) => point.kind === "pos");
+        const visible = points.filter((point) => point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const fit = bounds3d(visible.length ? visible : points);
+        config.center3d = fit;
+        config.view ||= { ...state.track3dView };
+        config.view.yaw ??= state.track3dView.yaw;
+        config.view.pitch ??= state.track3dView.pitch;
+        if (!config.view.userScaled && width > 20 && height > 20) {
+          config.view.scale = Math.min(width, height) * 0.42 / fit.radius;
+          state.track3dView.scale = config.view.scale;
+        } else if (!finite(config.view.scale) || config.view.scale <= 0) {
+          config.view.scale = 1;
+          state.track3dView.scale = config.view.scale;
+        }
+      }
+
+      function resetTrack3dView(config) {
+        config.view = { yaw: -0.72, pitch: -0.55, scale: null, userScaled: false };
+        state.track3dView = { ...config.view };
+      }
+
+      function zoomTrack3d(config, factor) {
+        config.view ||= { ...state.track3dView };
+        config.view.scale = Math.max((config.view.scale || 1) * factor, 0.0001);
+        config.view.userScaled = true;
+        state.track3dView = { ...config.view };
+      }
+
+      function track3dProject(point, config, plot) {
+        const center = config.center3d || { cx: 0, cy: 0, cz: 0 };
+        const view = config.view || state.track3dView;
+        const dx = point.x - center.cx;
+        const dy = point.y - center.cy;
+        const dz = point.z - center.cz;
+        const cyaw = Math.cos(view.yaw);
+        const syaw = Math.sin(view.yaw);
+        const cp = Math.cos(view.pitch);
+        const sp = Math.sin(view.pitch);
+        const x1 = dx * cyaw - dy * syaw;
+        const y1 = dx * syaw + dy * cyaw;
+        const z1 = dz;
+        return {
+          x: plot.left + plot.width / 2 + x1 * view.scale,
+          y: plot.top + plot.height / 2 - (y1 * cp - z1 * sp) * view.scale,
+          depth: y1 * sp + z1 * cp,
+        };
+      }
+
+      function drawProjectedLine(ctx, points, config, plot, strokeStyle, lineWidth) {
+        const visible = downsample(points);
+        if (!visible.length) return;
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        visible.forEach((point, index) => {
+          const screen = track3dProject(point, config, plot);
+          if (index === 0) ctx.moveTo(screen.x, screen.y);
+          else ctx.lineTo(screen.x, screen.y);
+        });
+        ctx.stroke();
+      }
+
+      function attitudeVector(row) {
+        const roll = ((Number(row?.Roll) || 0) * Math.PI) / 180;
+        const pitch = ((Number(row?.Pitch) || 0) * Math.PI) / 180;
+        const yaw = ((Number(row?.Yaw) || 0) * Math.PI) / 180;
+        const forward = [Math.sin(yaw) * Math.cos(pitch), Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch)];
+        const rightBase = [Math.cos(yaw), -Math.sin(yaw), 0];
+        const upBase = [
+          rightBase[1] * forward[2] - rightBase[2] * forward[1],
+          rightBase[2] * forward[0] - rightBase[0] * forward[2],
+          rightBase[0] * forward[1] - rightBase[1] * forward[0],
+        ];
+        const cr = Math.cos(roll);
+        const sr = Math.sin(roll);
+        const right = rightBase.map((value, index) => value * cr + upBase[index] * sr);
+        const up = upBase.map((value, index) => value * cr - rightBase[index] * sr);
+        return { forward, right, up };
+      }
+
+      function drawAircraftTriad(ctx, basePoint, attitudeRow, config, plot, size) {
+        const attitude = attitudeVector(attitudeRow);
+        const base = track3dProject(basePoint, config, plot);
+        const axes = [
+          { vector: attitude.forward, color: colors.blue, label: "nose" },
+          { vector: attitude.right, color: colors.red, label: "right" },
+          { vector: attitude.up, color: colors.gold, label: "up" },
+        ];
+        ctx.lineWidth = 3;
+        axes.forEach((axis) => {
+          const tip = track3dProject({ x: basePoint.x + axis.vector[0] * size, y: basePoint.y + axis.vector[1] * size, z: basePoint.z + axis.vector[2] * size }, config, plot);
+          ctx.strokeStyle = axis.color;
+          ctx.beginPath();
+          ctx.moveTo(base.x, base.y);
+          ctx.lineTo(tip.x, tip.y);
+          ctx.stroke();
+          ctx.fillStyle = axis.color;
+          ctx.fillText(axis.label, tip.x + 4, tip.y - 4);
+        });
+        ctx.fillStyle = colors.teal;
+        ctx.beginPath();
+        ctx.arc(base.x, base.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function drawTrack3dChart(config) {
+        const canvas = document.querySelector(`#${config.id}`);
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+        canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+        ctx.scale(dpr, dpr);
+        const width = rect.width;
+        const height = rect.height;
+        const pad = { left: 20, right: 16, top: 20, bottom: 28 };
+        const plot = { left: pad.left, top: pad.top, width: width - pad.left - pad.right, height: height - pad.top - pad.bottom };
+        ensureTrack3dView(config, plot.width, plot.height);
+        state.track3dView = { ...config.view };
+
+        const projected = projectTrack3d(config);
+        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const allPos = projected.filter((point) => point.kind === "pos");
+        const wpPoints = projected.filter((point) => point.kind === "wp");
+        const markerTime = finite(state.inspectorTime) ? state.inspectorTime : state.range.end;
+        const current = (nearestRow(allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
+        const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
+        const size = Math.max(20, (config.center3d?.radius || 80) * 0.15);
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.strokeStyle = "#d7ded6";
+        ctx.strokeRect(plot.left, plot.top, plot.width, plot.height);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(plot.left, plot.top, plot.width, plot.height);
+        ctx.clip();
+
+        const center = config.center3d || { cx: 0, cy: 0, cz: 0, radius: 80 };
+        const gridSize = Math.max(80, center.radius * 1.4);
+        const gridZ = Math.min(...(posPoints.length ? posPoints : allPos).map((point) => point.z).concat([0]));
+        const gridCorners = [
+          { x: center.cx - gridSize, y: center.cy - gridSize, z: gridZ },
+          { x: center.cx + gridSize, y: center.cy - gridSize, z: gridZ },
+          { x: center.cx + gridSize, y: center.cy + gridSize, z: gridZ },
+          { x: center.cx - gridSize, y: center.cy + gridSize, z: gridZ },
+        ];
+        ctx.strokeStyle = "rgba(123, 135, 128, 0.35)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < gridCorners.length; i++) {
+          const a = track3dProject(gridCorners[i], config, plot);
+          const b = track3dProject(gridCorners[(i + 1) % gridCorners.length], config, plot);
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+
+        drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
+        drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4);
+
+        ctx.fillStyle = colors.gold;
+        wpPoints.forEach((point) => {
+          const screen = track3dProject(point, config, plot);
+          ctx.beginPath();
+          ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+        if (highlighted) {
+          const screen = track3dProject(highlighted, config, plot);
+          ctx.strokeStyle = colors.red;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(screen.x, screen.y, 10, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = colors.red;
+          ctx.fillText(`#${highlighted.row.index}`, screen.x + 12, screen.y - 8);
+        }
+
+        if (current && attitude) drawAircraftTriad(ctx, current, attitude, config, plot, size);
+        ctx.restore();
+
+        ctx.fillStyle = "#607068";
+        ctx.font = canvasFont(12);
+        ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
+        const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
+        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 3D POS: ${posPoints.length} | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+      }
+
       function drawTrackChart(config) {
         const canvas = document.querySelector(`#${config.id}`);
         if (!canvas) return;
@@ -1932,7 +2172,7 @@
 
       function renderLegend(config) {
         const node = document.querySelector(`#${config.id}-legend`);
-        if (!node || config.type === "track") return;
+        if (!node || config.type === "track" || config.type === "track3d") return;
         state.hidden[config.id] ||= {};
         node.innerHTML = config.series
           .map(
@@ -1966,6 +2206,11 @@
           zoomIn.textContent = "Map +";
           zoomOut.textContent = "Map -";
           hClear?.remove();
+        } else if (config.type === "track3d") {
+          reset.textContent = "Reset 3D";
+          zoomIn.textContent = "3D +";
+          zoomOut.textContent = "3D -";
+          hClear?.remove();
         } else {
           reset.textContent = "Reset Y";
           zoomIn.textContent = "Y +";
@@ -1973,12 +2218,15 @@
         }
         reset.addEventListener("click", () => {
           if (config.type === "track") resetTrackScale(config);
+          else if (config.type === "track3d") resetTrack3dView(config);
           else resetLineScale(config);
           renderAllCharts();
         });
         zoomIn.addEventListener("click", () => {
           if (config.type === "track") {
             config.mapView.metersPerPx = Math.max(config.mapView.metersPerPx * 0.82, 0.01);
+          } else if (config.type === "track3d") {
+            zoomTrack3d(config, 1.18);
           } else {
             zoomLineY(config, 0.82);
           }
@@ -1986,6 +2234,7 @@
         });
         zoomOut.addEventListener("click", () => {
           if (config.type === "track") config.mapView.metersPerPx *= 1.22;
+          else if (config.type === "track3d") zoomTrack3d(config, 1 / 1.18);
           else zoomLineY(config, 1.22);
           renderAllCharts();
         });
@@ -1998,6 +2247,7 @@
       function renderAllCharts() {
         for (const config of charts.values()) {
           if (config.type === "track") drawTrackChart(config);
+          else if (config.type === "track3d") drawTrack3dChart(config);
           else drawLineChart(config);
         }
       }
@@ -2031,6 +2281,11 @@
             drawTrackChart(config);
             return;
           }
+          if (config.type === "track3d") {
+            zoomTrack3d(config, event.deltaY < 0 ? 1.14 : 1 / 1.14);
+            drawTrack3dChart(config);
+            return;
+          }
           if (event.shiftKey) {
             const pad = { left: 52, right: 16, top: 38, bottom: 34 };
             const plotH = rect.height - pad.top - pad.bottom;
@@ -2059,6 +2314,15 @@
                 distance: metrics.distance,
                 mapView: { ...config.mapView },
               };
+            } else if (config.type === "track3d") {
+              ensureTrack3dView(config, rect.width, rect.height);
+              state.pinch = {
+                chartId: config.id,
+                type: "track3d-pinch",
+                distance: metrics.distance,
+                scale: config.view.scale,
+              };
+              config.view.userScaled = true;
             } else {
               const centerRatioX = (metrics.cx - rect.left) / rect.width;
               const pad = { left: 52, right: 16, top: 38, bottom: 34 };
@@ -2083,6 +2347,9 @@
           }
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
+          } else if (config.type === "track3d") {
+            ensureTrack3dView(config, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height);
+            state.dragging = { chartId: config.id, type: "track3d-rotate", x: event.clientX, y: event.clientY, yaw: config.view.yaw, pitch: config.view.pitch };
           } else {
             const rect = canvas.getBoundingClientRect();
             const { pad, plotW, plotH } = linePlot(rect);
@@ -2134,6 +2401,10 @@
               config.mapView = { ...state.pinch.mapView };
               config.mapView.metersPerPx = Math.max(state.pinch.mapView.metersPerPx * (state.pinch.distance / metrics.distance), 0.01);
               drawTrackChart(config);
+            } else if (state.pinch.type === "track3d-pinch") {
+              ensureTrack3dView(config, rect.width, rect.height);
+              config.view.scale = Math.max(state.pinch.scale * (metrics.distance / state.pinch.distance), 0.0001);
+              drawTrack3dChart(config);
             } else if (state.pinch.type === "plot-pinch") {
               const nextXSpan = Math.max(state.pinch.xSpan * (state.pinch.dx / metrics.dx), 0.25);
               const nextYSpan = Math.max(state.pinch.ySpan * (state.pinch.dy / metrics.dy), 1e-9);
@@ -2158,6 +2429,16 @@
             drawTrackChart(config);
             return;
           }
+          if (state.dragging?.chartId === config.id && state.dragging.type === "track3d-rotate") {
+            const dx = event.clientX - state.dragging.x;
+            const dy = event.clientY - state.dragging.y;
+            state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
+            ensureTrack3dView(config, rect.width, rect.height);
+            config.view.yaw = state.dragging.yaw + dx * 0.008;
+            config.view.pitch = Math.max(-1.25, Math.min(0.35, state.dragging.pitch + dy * 0.006));
+            drawTrack3dChart(config);
+            return;
+          }
           const time = state.range.start + ((event.clientX - rect.left) / rect.width) * (state.range.end - state.range.start);
           if (state.dragging?.chartId === config.id && state.dragging.type === "h-ref") {
             state.hRefs[config.id][state.dragging.index] = yFromCanvas(config, event.clientY - rect.top, rect);
@@ -2178,7 +2459,7 @@
             const yDelta = (dy / Math.max(1, plotH)) * span;
             config.yView = { minY: state.dragging.minY + yDelta, maxY: state.dragging.maxY + yDelta };
             setRange(state.dragging.start + dt, state.dragging.end + dt, "pan");
-          } else if (config.type !== "track") {
+          } else if (config.type === "line") {
             state.hover[config.id] = { time };
             drawLineChart(config);
           }
@@ -2209,7 +2490,7 @@
           }
         });
         canvas.addEventListener("click", (event) => {
-          if (config.type === "track") return;
+          if (config.type === "track" || config.type === "track3d") return;
           if (state.skipClick === config.id) {
             state.skipClick = null;
             return;
@@ -2426,9 +2707,9 @@
           layer(
             1,
             "Track / Geometry",
-            "当前时间窗口航迹和航点。",
-            chartPanel("track-chart"),
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            "当前时间窗口航迹、航点和 3D 姿态复现。",
+            `${chartPanel("track-chart")}<div style="height:12px"></div>${chartPanel("track-3d-chart")}`,
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">拖动旋转；滚轮或双指缩放；Reset 3D 恢复视角。姿态符号：nose 蓝，right 红，up 金。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
@@ -2501,6 +2782,7 @@
             ],
           },
           { id: "track-chart", type: "track", posRows: track.messages.POS, waypointRows: summary.waypoints },
+          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
           {
             id: "l1-chart",
             type: "line",
