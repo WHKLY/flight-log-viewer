@@ -37,6 +37,7 @@ Date: 2026-08-23
 - The Track layer now has local time controls: path display can switch between the shared window and full flight, while the aircraft marker uses an independent selected time. The 3D view now supports pan on desktop and tablet, and the displayed roll sign is corrected.
 - Track time controls now sit between the 2D and 3D track canvases, include a Track-specific flight-mode filter, allow the aircraft marker slider to use either the current window or full flight, and the 3D marker is drawn as a simple aircraft model instead of only a triad.
 - Track playback controls now advance the independent Plane time marker with selectable speed. The 3D aircraft model is smaller and uses line-only wings/body without the translucent green surface fill.
+- Track playback polish: the Track control panel now uses theme-aware background color, and Plane time drag/playback updates the global Inspector time so status cards follow the selected aircraft marker time.
 
 ## Current sample
 
@@ -181,6 +182,16 @@ Changes for this pass:
 - Add Track playback controls that advance only the independent Plane time marker, not the global shared chart timeline.
 - Add playback speed choices so replay can run slower or faster while respecting the current marker slider bounds.
 - Stop playback automatically at the end of the selected marker range.
+
+## Track playback polish v5 plan
+
+Goal: fix the playback-control regressions without changing the larger Track design.
+
+Changes for this pass:
+
+- Use theme-aware panel colors for Track controls so dark mode does not show a white control block.
+- Keep Plane time useful for inspection: dragging the marker slider and playback both update the global inspector time so status cards follow the aircraft marker.
+- Avoid changing the global shared chart time range while doing this; only the inspect marker and Track aircraft marker move.
 
 ## Next direction
 

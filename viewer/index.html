@@ -446,7 +446,7 @@
       }
 
       .track-controls {
-        background: rgba(255, 255, 255, 0.88);
+        background: var(--soft);
         border: 1px solid var(--line);
         border-radius: 10px;
         box-shadow: var(--shadow);
@@ -1459,9 +1459,15 @@
         return clamp(value, bounds.start, bounds.end);
       }
 
-      function setTrackMarkerTime(time) {
+      function syncTrackInspector(time) {
+        state.inspectorTime = time;
+        renderInspector();
+      }
+
+      function setTrackMarkerTime(time, syncInspector = true) {
         const bounds = trackMarkerBounds();
         state.trackMarkerTime = clamp(Number(time), bounds.start, bounds.end);
+        if (syncInspector) syncTrackInspector(state.trackMarkerTime);
         updateTrackControls();
         renderAllCharts();
       }
@@ -1483,6 +1489,7 @@
         const next = trackMarkerTime() + dt;
         if (next >= bounds.end) {
           state.trackMarkerTime = bounds.end;
+          syncTrackInspector(state.trackMarkerTime);
           state.trackPlaying = false;
           state.trackPlaybackLastMs = null;
           state.trackPlaybackFrame = null;
@@ -1491,6 +1498,7 @@
           return;
         }
         state.trackMarkerTime = next;
+        syncTrackInspector(state.trackMarkerTime);
         updateTrackControls();
         renderAllCharts();
         state.trackPlaybackFrame = requestAnimationFrame(trackPlaybackStep);
