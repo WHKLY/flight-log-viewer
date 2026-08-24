@@ -60,7 +60,7 @@
       main {
         display: grid;
         gap: 14px;
-        grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+        grid-template-columns: minmax(208px, 232px) minmax(0, 1fr);
         margin: 0 auto;
         max-width: 1500px;
         padding: 18px 16px 48px;
@@ -71,10 +71,22 @@
         display: grid;
         gap: 12px;
         max-height: calc(100dvh - 36px);
-        overflow-y: auto;
+        max-width: 232px;
+        min-width: 0;
+        overflow: auto;
         padding-right: 2px;
         position: sticky;
+        scrollbar-width: thin;
         top: 18px;
+        width: 100%;
+      }
+
+      .control-panel > *,
+      .toolbar *,
+      .inspector *,
+      .metric * {
+        min-width: 0;
+        max-width: 100%;
       }
 
       .viewer-panel {
@@ -388,6 +400,31 @@
 
       .table-scroll table {
         min-width: 100%;
+      }
+
+      .param-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: grid;
+        gap: 6px;
+        max-height: 260px;
+        overflow: auto;
+        padding: 8px;
+        scrollbar-width: thin;
+      }
+
+      .param-row {
+        display: grid;
+        gap: 4px;
+        grid-template-columns: minmax(96px, 0.9fr) minmax(0, 1.1fr);
+        min-width: 260px;
+      }
+
+      .param-row code,
+      .param-row span {
+        overflow: auto;
+        scrollbar-width: thin;
+        white-space: nowrap;
       }
 
       .custom-controls {
@@ -829,6 +866,63 @@
           .replaceAll('"', "&quot;");
       }
 
+      const layerParameterMap = {
+        l1: [
+          ["NAVL1_PERIOD", "turn scale"],
+          ["NAVL1_DAMPING", "damping"],
+          ["NAVL1_XTRACK_I", "xtrack I"],
+          ["NAVL1_LIM_BANK", "bank limit"],
+          ["ROLL_LIMIT_DEG", "roll cap"],
+        ],
+        tecs: [
+          ["TECS_TIME_CONST", "response"],
+          ["TECS_SPDWEIGHT", "speed/height"],
+          ["TECS_RLL2THR", "turn throttle"],
+          ["TECS_CLMB_MAX", "climb"],
+          ["TECS_SINK_MIN", "sink min"],
+          ["TECS_SINK_MAX", "sink max"],
+          ["THR_MIN", "thr min"],
+          ["THR_MAX", "thr max"],
+          ["ARSPD_USE", "airspeed"],
+        ],
+        attitude: [
+          ["RLL2SRV_TCONST", "roll time"],
+          ["RLL2SRV_RMAX", "roll rate cap"],
+          ["RLL2SRV_ANGLE_P", "roll angle P"],
+          ["RLL_RATE_P", "roll P"],
+          ["RLL_RATE_I", "roll I"],
+          ["RLL_RATE_D", "roll D"],
+          ["PTCH2SRV_TCONST", "pitch time"],
+          ["PTCH_RATE_P", "pitch P"],
+          ["PTCH_RATE_I", "pitch I"],
+          ["PTCH_RATE_D", "pitch D"],
+          ["SCALING_SPEED", "speed scale"],
+        ],
+        io: [
+          ["SERVO1_FUNCTION", "C1 func"],
+          ["SERVO2_FUNCTION", "C2 func"],
+          ["SERVO3_FUNCTION", "C3 func"],
+          ["SERVO4_FUNCTION", "C4 func"],
+          ["SERVO1_TRIM", "C1 trim"],
+          ["SERVO2_TRIM", "C2 trim"],
+          ["SERVO3_TRIM", "C3 trim"],
+          ["SERVO4_TRIM", "C4 trim"],
+          ["RC1_TRIM", "RC1 trim"],
+          ["RC2_TRIM", "RC2 trim"],
+          ["RC3_TRIM", "RC3 trim"],
+          ["RC4_TRIM", "RC4 trim"],
+        ],
+        motion: [
+          ["INS_ACCEL_FILTER", "accel filter"],
+          ["INS_GYRO_FILTER", "gyro filter"],
+          ["INS_HNTCH_ENABLE", "harmonic notch"],
+          ["INS_NOTCH_ENABLE", "notch"],
+          ["EK3_ENABLE", "EKF3"],
+          ["EK3_IMU_MASK", "IMU mask"],
+          ["AHRS_EKF_TYPE", "AHRS EKF"],
+        ],
+      };
+
       const controlChains = [
         {
           title: "AUTO Mission -> L1 -> NavRoll",
@@ -1029,6 +1123,17 @@
           }
         }
         return found;
+      }
+
+      function renderLayerParams(summary, layerKey) {
+        const params = summary.control_params || {};
+        const rows = layerParameterMap[layerKey] || [];
+        if (!rows.length) return "";
+        const body = rows.map(([name, role]) => {
+          const hasValue = Object.prototype.hasOwnProperty.call(params, name);
+          return `<div class="param-row"><code title="${escapeHtml(name)}">${escapeHtml(name)}</code><span title="${escapeHtml(role)}">${hasValue ? escapeHtml(params[name]) : "missing"} · ${escapeHtml(role)}</span></div>`;
+        }).join("");
+        return `<h3>Key params</h3><div class="param-card">${body}</div>`;
       }
 
       function renderParameterList(names) {
@@ -2336,35 +2441,35 @@
             "L1 Navigation",
             "横向误差、目标滚转、实际滚转。",
             chartPanel("l1-chart"),
-            `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div>`,
+            `<h3>L1 data</h3><div class="note">NTUN.Dist ${stats(navigation.messages.NTUN, "Dist")} m<br>NTUN.XT ${stats(navigation.messages.NTUN, "XT")} m<br>CTUN.NavRoll ${stats(navigation.messages.CTUN, "NavRoll")} deg</div>${renderLayerParams(summary, "l1")}`,
           ),
           layer(
             3,
             "TECS Energy",
             "高度、速度、俯仰、油门需求。",
             chartPanel("tecs-chart"),
-            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div>`,
+            `<h3>TECS rate</h3><div class="note">TECS records: ${tecs.messages.TECS.length}<br>TEC2 records: ${tecs.messages.TEC2.length}<br>ARSP records: ${tecs.messages.ARSP.length}</div>${renderLayerParams(summary, "tecs")}`,
           ),
           layer(
             4,
             "Attitude / Rate",
             "姿态目标、实际姿态、Rate PID。",
             `${chartPanel("att-chart")}<div style="height:12px"></div>${chartPanel("pid-chart", true)}`,
-            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div>`,
+            `<h3>Rate PID availability</h3><div class="note">PIDR ${pid.messages.PIDR.length}<br>PIDP ${pid.messages.PIDP.length}<br>PIDY ${pid.messages.PIDY.length}</div>${renderLayerParams(summary, "attitude")}`,
           ),
           layer(
             5,
             "Motion / IMU",
             "IMU 加速度、角速度、振动、EKF 速度。",
             chartPanel("motion-chart"),
-            `<h3>Motion records</h3><div class="note">IMU ${motion.messages.IMU.length}<br>VIBE ${motion.messages.VIBE.length}<br>XKF1 ${motion.messages.XKF1.length}<br>XKF2 ${motion.messages.XKF2.length}<br>RATE ${motion.messages.RATE.length}</div>`,
+            `<h3>Motion records</h3><div class="note">IMU ${motion.messages.IMU.length}<br>VIBE ${motion.messages.VIBE.length}<br>XKF1 ${motion.messages.XKF1.length}<br>XKF2 ${motion.messages.XKF2.length}<br>RATE ${motion.messages.RATE.length}</div>${renderLayerParams(summary, "motion")}`,
           ),
           layer(
             6,
             "I/O Outputs",
             "RC 输入和 PWM 输出。",
             chartPanel("io-chart"),
-            `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div>`,
+            `<h3>Output ranges</h3><div class="note">C1 ${stats(io.messages.RCOU, "C1")}<br>C2 ${stats(io.messages.RCOU, "C2")}<br>C3 ${stats(io.messages.RCOU, "C3")}<br>C4 ${stats(io.messages.RCOU, "C4")}</div>${renderLayerParams(summary, "io")}`,
           ),
           layer(
             7,

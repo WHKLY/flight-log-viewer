@@ -120,6 +120,18 @@ Changes for this pass:
 - Text-heavy UI containers use horizontal and vertical overflow scrolling where content can exceed the available area.
 - Tables and small value labels prefer contained scrolling over pushing chart widths or panel widths wider.
 
+
+## Parameter panel v1 and sidebar width plan
+
+Goal: start layer-specific parameter analysis without letting the left control panel steal chart width.
+
+Changes for this pass:
+
+- Clamp the expanded left control panel to a narrower fixed range and force child content to scroll inside it instead of widening the grid.
+- Add a lightweight parameter map in the viewer for L1, TECS, attitude/rate, I/O, and motion layers.
+- Render compact parameter cards in layer side panels using current `.param` values from `dataset-summary.json`.
+- Keep long parameter names and values horizontally scrollable inside cards.
+
 ## Next direction
 
 The next useful step is the parameter-analysis layer: read `param`, map key parameters to L1, TECS, attitude/rate, and I/O layers, then display relevant parameter values beside the chart where their effects are interpreted.
