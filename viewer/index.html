@@ -383,9 +383,17 @@
 
       .chart-control-bar button,
       .custom-controls button,
-      .custom-controls select {
+      .custom-controls select,
+      .track-controls button,
+      .track-controls input {
         font-size: 12px;
         padding: 5px 9px;
+      }
+
+      .track-controls input[type="range"] {
+        padding-left: 0;
+        padding-right: 0;
+        width: 100%;
       }
 
       .custom-controls select {
@@ -431,9 +439,14 @@
         white-space: nowrap;
       }
 
-      .custom-controls {
+      .custom-controls,
+      .track-controls {
         display: grid;
         gap: 8px;
+      }
+
+      .track-controls .mode-buttons {
+        gap: 6px;
       }
 
       .inspector {
@@ -794,11 +807,13 @@
         hRefs: {},
         timeRefs: [],
         highlightedWaypointIndex: null,
+        trackPathMode: "window",
+        trackMarkerTime: null,
         inspectorTime: null,
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
         fontScale: "normal",
-        track3dView: { yaw: -0.72, pitch: -0.55, scale: null, userScaled: false },
+        track3dView: { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false },
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -1379,6 +1394,75 @@
         });
       }
 
+      function clamp(value, minValue, maxValue) {
+        return Math.max(minValue, Math.min(maxValue, value));
+      }
+
+      function trackPathRange() {
+        return state.trackPathMode === "full" ? state.fullRange : state.range;
+      }
+
+      function trackMarkerTime() {
+        const fallback = finite(state.range.end) ? state.range.end : state.fullRange.start;
+        const value = finite(state.trackMarkerTime) ? state.trackMarkerTime : fallback;
+        return clamp(value, state.fullRange.start, state.fullRange.end);
+      }
+
+      function setTrackMarkerTime(time) {
+        state.trackMarkerTime = clamp(Number(time), state.fullRange.start, state.fullRange.end);
+        updateTrackControls();
+        renderAllCharts();
+      }
+
+      function trackControlsHtml() {
+        const start = state.fullRange.start;
+        const end = state.fullRange.end;
+        const span = Math.max(end - start, 1);
+        const step = Math.max(span / 1200, 0.02);
+        return `<h3>Track time</h3><div class="track-controls">
+          <div class="mode-buttons">
+            <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Window path</button>
+            <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Full path</button>
+          </div>
+          <label>Plane time <span class="range-text" id="track-marker-text"></span><input id="track-marker-time" type="range" min="${start}" max="${end}" step="${step}" value="${trackMarkerTime()}"></label>
+          <div class="chart-actions">
+            <button id="track-marker-window-end">At window end</button>
+            <button id="track-marker-inspect">At inspect</button>
+          </div>
+          <div class="range-text" id="track-path-text"></div>
+        </div>`;
+      }
+
+      function updateTrackControls() {
+        const slider = document.querySelector("#track-marker-time");
+        const marker = trackMarkerTime();
+        if (slider && document.activeElement !== slider) slider.value = marker;
+        const markerText = document.querySelector("#track-marker-text");
+        if (markerText) markerText.textContent = `${fmt.format(marker)}s`;
+        const pathRange = trackPathRange();
+        const pathText = document.querySelector("#track-path-text");
+        if (pathText) pathText.textContent = `${state.trackPathMode === "full" ? "Full" : "Window"}: ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s`;
+        document.querySelectorAll("[data-track-path-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.trackPathMode === state.trackPathMode);
+        });
+      }
+
+      function bindTrackControls() {
+        document.querySelectorAll("[data-track-path-mode]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.trackPathMode = button.dataset.trackPathMode;
+            updateTrackControls();
+            renderAllCharts();
+          });
+        });
+        document.querySelector("#track-marker-time")?.addEventListener("input", (event) => setTrackMarkerTime(event.target.value));
+        document.querySelector("#track-marker-window-end")?.addEventListener("click", () => setTrackMarkerTime(state.range.end));
+        document.querySelector("#track-marker-inspect")?.addEventListener("click", () => {
+          if (finite(state.inspectorTime)) setTrackMarkerTime(state.inspectorTime);
+        });
+        updateTrackControls();
+      }
+
       function renderToolbar() {
         document.querySelector("#timeline-toolbar").innerHTML = `<div class="toolbar">
           <div class="toolbar-row"><strong>Time / Flight Mode 横轴</strong><span class="range-text" id="range-text"></span></div>
@@ -1886,12 +1970,15 @@
 
       function ensureTrack3dView(config, width, height) {
         const points = projectTrack3d(config).filter((point) => point.kind === "pos");
-        const visible = points.filter((point) => point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const pathRange = trackPathRange();
+        const visible = points.filter((point) => point.time_s >= pathRange.start && point.time_s <= pathRange.end);
         const fit = bounds3d(visible.length ? visible : points);
         config.center3d = fit;
         config.view ||= { ...state.track3dView };
         config.view.yaw ??= state.track3dView.yaw;
         config.view.pitch ??= state.track3dView.pitch;
+        config.view.panX ??= state.track3dView.panX || 0;
+        config.view.panY ??= state.track3dView.panY || 0;
         if (!config.view.userScaled && width > 20 && height > 20) {
           config.view.scale = Math.min(width, height) * 0.42 / fit.radius;
           state.track3dView.scale = config.view.scale;
@@ -1902,7 +1989,7 @@
       }
 
       function resetTrack3dView(config) {
-        config.view = { yaw: -0.72, pitch: -0.55, scale: null, userScaled: false };
+        config.view = { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false };
         state.track3dView = { ...config.view };
       }
 
@@ -1927,8 +2014,8 @@
         const y1 = dx * syaw + dy * cyaw;
         const z1 = dz;
         return {
-          x: plot.left + plot.width / 2 + x1 * view.scale,
-          y: plot.top + plot.height / 2 - (y1 * cp - z1 * sp) * view.scale,
+          x: plot.left + plot.width / 2 + (view.panX || 0) + x1 * view.scale,
+          y: plot.top + plot.height / 2 + (view.panY || 0) - (y1 * cp - z1 * sp) * view.scale,
           depth: y1 * sp + z1 * cp,
         };
       }
@@ -1948,7 +2035,7 @@
       }
 
       function attitudeVector(row) {
-        const roll = ((Number(row?.Roll) || 0) * Math.PI) / 180;
+        const roll = -((Number(row?.Roll) || 0) * Math.PI) / 180;
         const pitch = ((Number(row?.Pitch) || 0) * Math.PI) / 180;
         const yaw = ((Number(row?.Yaw) || 0) * Math.PI) / 180;
         const forward = [Math.sin(yaw) * Math.cos(pitch), Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch)];
@@ -2007,10 +2094,11 @@
         state.track3dView = { ...config.view };
 
         const projected = projectTrack3d(config);
-        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const pathRange = trackPathRange();
+        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= pathRange.start && point.time_s <= pathRange.end);
         const allPos = projected.filter((point) => point.kind === "pos");
         const wpPoints = projected.filter((point) => point.kind === "wp");
-        const markerTime = finite(state.inspectorTime) ? state.inspectorTime : state.range.end;
+        const markerTime = trackMarkerTime();
         const current = (nearestRow(allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
         const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
         const size = Math.max(20, (config.center3d?.radius || 80) * 0.15);
@@ -2073,7 +2161,7 @@
         ctx.font = canvasFont(12);
         ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
         const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
-        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 3D POS: ${posPoints.length} | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
       }
 
       function drawTrackChart(config) {
@@ -2092,7 +2180,11 @@
         if (!config.mapView) fitTrackView(config, plot.width, plot.height);
 
         const projected = projectTrack(config);
-        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= state.range.start && point.time_s <= state.range.end);
+        const pathRange = trackPathRange();
+        const posPoints = projected.filter((point) => point.kind === "pos" && point.time_s >= pathRange.start && point.time_s <= pathRange.end);
+        const allPos = projected.filter((point) => point.kind === "pos");
+        const markerTime = trackMarkerTime();
+        const markerPoint = nearestRow(allPos, markerTime)?.row || null;
         const wpPoints = projected.filter((point) => point.kind === "wp");
         const omittedWaypoints = config.omittedWaypoints || 0;
         const sx = (x) => plot.left + plot.width / 2 + (x - config.mapView.cx) / config.mapView.metersPerPx;
@@ -2149,6 +2241,17 @@
           ctx.fill();
         });
         const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+        if (markerPoint) {
+          const mx = sx(markerPoint.x);
+          const my = sy(markerPoint.y);
+          ctx.strokeStyle = colors.teal;
+          ctx.fillStyle = colors.teal;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(mx, my, 7, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillText(`plane ${fmt.format(markerTime)}s`, mx + 10, my + 14);
+        }
         if (highlighted) {
           const hx = sx(highlighted.x);
           const hy = sy(highlighted.y);
@@ -2167,7 +2270,7 @@
         ctx.fillStyle = "#607068";
         ctx.font = canvasFont(12);
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
-        document.querySelector(`#${config.id}-readout`).textContent = `${fmt.format(state.range.start)}s..${fmt.format(state.range.end)}s 内 POS 点: ${posPoints.length} | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -2245,6 +2348,7 @@
       }
 
       function renderAllCharts() {
+        updateTrackControls();
         for (const config of charts.values()) {
           if (config.type === "track") drawTrackChart(config);
           else if (config.type === "track3d") drawTrack3dChart(config);
@@ -2257,6 +2361,9 @@
         if (!canvas || config.bound) return;
         config.bound = true;
         const pointers = new Map();
+        canvas.addEventListener("contextmenu", (event) => {
+          if (config.type === "track3d") event.preventDefault();
+        });
         const pointerPair = () => [...pointers.values()].slice(0, 2);
         const pairMetrics = () => {
           const [a, b] = pointerPair();
@@ -2320,7 +2427,11 @@
                 chartId: config.id,
                 type: "track3d-pinch",
                 distance: metrics.distance,
+                cx: metrics.cx,
+                cy: metrics.cy,
                 scale: config.view.scale,
+                panX: config.view.panX || 0,
+                panY: config.view.panY || 0,
               };
               config.view.userScaled = true;
             } else {
@@ -2349,7 +2460,10 @@
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
           } else if (config.type === "track3d") {
             ensureTrack3dView(config, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height);
-            state.dragging = { chartId: config.id, type: "track3d-rotate", x: event.clientX, y: event.clientY, yaw: config.view.yaw, pitch: config.view.pitch };
+            const panGesture = event.shiftKey || event.button === 1 || event.button === 2;
+            state.dragging = panGesture
+              ? { chartId: config.id, type: "track3d-pan", x: event.clientX, y: event.clientY, panX: config.view.panX || 0, panY: config.view.panY || 0 }
+              : { chartId: config.id, type: "track3d-rotate", x: event.clientX, y: event.clientY, yaw: config.view.yaw, pitch: config.view.pitch };
           } else {
             const rect = canvas.getBoundingClientRect();
             const { pad, plotW, plotH } = linePlot(rect);
@@ -2404,6 +2518,9 @@
             } else if (state.pinch.type === "track3d-pinch") {
               ensureTrack3dView(config, rect.width, rect.height);
               config.view.scale = Math.max(state.pinch.scale * (metrics.distance / state.pinch.distance), 0.0001);
+              config.view.panX = state.pinch.panX + (metrics.cx - state.pinch.cx);
+              config.view.panY = state.pinch.panY + (metrics.cy - state.pinch.cy);
+              config.view.userScaled = true;
               drawTrack3dChart(config);
             } else if (state.pinch.type === "plot-pinch") {
               const nextXSpan = Math.max(state.pinch.xSpan * (state.pinch.dx / metrics.dx), 0.25);
@@ -2436,6 +2553,16 @@
             ensureTrack3dView(config, rect.width, rect.height);
             config.view.yaw = state.dragging.yaw + dx * 0.008;
             config.view.pitch = Math.max(-1.25, Math.min(0.35, state.dragging.pitch + dy * 0.006));
+            drawTrack3dChart(config);
+            return;
+          }
+          if (state.dragging?.chartId === config.id && state.dragging.type === "track3d-pan") {
+            const dx = event.clientX - state.dragging.x;
+            const dy = event.clientY - state.dragging.y;
+            state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
+            ensureTrack3dView(config, rect.width, rect.height);
+            config.view.panX = state.dragging.panX + dx;
+            config.view.panY = state.dragging.panY + dy;
             drawTrack3dChart(config);
             return;
           }
@@ -2709,7 +2836,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}<div style="height:12px"></div>${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">拖动旋转；滚轮或双指缩放；Reset 3D 恢复视角。姿态符号：nose 蓝，right 红，up 金。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `${trackControlsHtml()}<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。姿态符号：nose 蓝，right 红，up 金。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
@@ -2770,6 +2897,7 @@
           });
         });
         bindWaypointButtons();
+        bindTrackControls();
 
         registerCharts([
           {

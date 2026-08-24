@@ -34,6 +34,7 @@ Date: 2026-08-23
 - Missing generated JSON files no longer block the whole viewer; absent groups fall back to empty data and the compatibility panel lists what is missing.
 - `extract_dataflash_series.py` writes empty series and manifest output when no `.BIN` file is present, so waypoint-only or parameter-only packages can still be opened after `summarize_dataset.py` runs.
 - The Track layer now includes a lightweight 3D Flight Path canvas using POS altitude and nearest ATT attitude; it supports drag rotation, wheel/pinch zoom, Reset 3D, shared time-window filtering, waypoint highlighting, and a simple nose/right/up attitude triad.
+- The Track layer now has local time controls: path display can switch between the shared window and full flight, while the aircraft marker uses an independent selected time. The 3D view now supports pan on desktop and tablet, and the displayed roll sign is corrected.
 
 ## Current sample
 
@@ -144,6 +145,18 @@ Changes for this pass:
 - Use ATT `Roll/Pitch/Yaw` near the current inspect time, or the visible segment end when no inspect time is selected, to draw a simple aircraft attitude triad.
 - Support direct drag rotation, wheel/pinch zoom, and reset view for tablet operation.
 - Keep this as a lightweight Canvas projection first; later versions may replace the aircraft marker with a richer WebGL model if the interaction and data mapping prove useful.
+
+## Track timeline and 3D interaction v2 plan
+
+Goal: separate path display time from aircraft marker time and make 3D navigation usable on both tablet and desktop.
+
+Changes for this pass:
+
+- Add Track-layer local controls for path display mode: current shared time window or whole-flight path.
+- Add an independent aircraft marker time slider so the airplane pose can be inspected at a specific time without changing the displayed path segment.
+- Apply the path display mode consistently to both 2D track and 3D track.
+- Correct the roll sign used by the simple aircraft attitude triad.
+- Add 3D pan: desktop Shift-drag/right-drag pans, normal drag rotates, wheel zooms; tablet two-finger gesture pans and zooms together.
 
 ## Next direction
 
