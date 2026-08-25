@@ -41,6 +41,7 @@ Date: 2026-08-23
 - Track HUD: the right-side Track panel now shows marker-time attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, GPS status, and sample ages. The 3D aircraft model is reduced by another 50 percent.
 - Track HUD now has a hide/show toggle and renders a graphical attitude indicator with sky/ground horizon, pitch ladder, roll pointer, heading cue, and missing-attitude state. Numeric speed/altitude/mode readouts remain below the graphical HUD.
 - Track HUD placement now follows the 3D view note and appears before the waypoint table, so it is visually aligned with the 3D track area rather than the top of the right-side panel.
+- Track HUD now uses a PFD-style layout: speed tape on the left, altitude tape on the right, heading tape at the bottom, central attitude horizon, and no separate numeric roll/pitch readout. The HUD block is placed after the waypoint table.
 
 ## Current sample
 
@@ -226,6 +227,17 @@ Changes for this pass:
 
 - Move the HUD block below Track bounds and the 3D view note, before the waypoint table.
 - Keep the existing show/hide behavior and HUD data refresh unchanged.
+
+## Track PFD-style HUD v9 plan
+
+Goal: make the graphical HUD follow the common PFD/HUD scan layout more closely.
+
+Changes for this pass:
+
+- Move the HUD block after the waypoint table.
+- Draw speed on the left side of the HUD graphic, altitude on the right, and heading along the bottom.
+- Keep the attitude horizon in the center but remove separate numeric roll/pitch readouts.
+- Keep both GPS ground speed and ARSP airspeed visible, with airspeed primary when available and GPS speed as a secondary speed cue.
 
 ## Next direction
 
