@@ -1887,10 +1887,10 @@
           ctx.stroke();
           if (finite(values.navRoll) || finite(values.navPitch)) {
             const navRoll = ((finite(values.navRoll) ? values.navRoll : values.roll) * Math.PI) / 180;
-            const navPitchOffset = clamp(finite(values.navPitch) ? values.navPitch : values.pitch, -45, 45) * (radius / 28);
+            const navPitchOffset = -clamp(finite(values.navPitch) ? values.navPitch : values.pitch, -45, 45) * (radius / 28);
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.rotate(-navRoll);
+            ctx.rotate(navRoll);
             ctx.translate(0, navPitchOffset);
             ctx.strokeStyle = "#4db6ff";
             ctx.lineWidth = 2;
@@ -1904,10 +1904,10 @@
           }
           if (finite(values.desRoll) || finite(values.desPitch)) {
             const targetRoll = ((finite(values.desRoll) ? values.desRoll : values.roll) * Math.PI) / 180;
-            const targetPitchOffset = clamp(finite(values.desPitch) ? values.desPitch : values.pitch, -45, 45) * (radius / 28);
+            const targetPitchOffset = -clamp(finite(values.desPitch) ? values.desPitch : values.pitch, -45, 45) * (radius / 28);
             ctx.save();
             ctx.translate(cx, cy);
-            ctx.rotate(-targetRoll);
+            ctx.rotate(targetRoll);
             ctx.translate(0, targetPitchOffset);
             ctx.strokeStyle = "#ff4dff";
             ctx.lineWidth = 2;
