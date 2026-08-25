@@ -209,8 +209,8 @@
         display: block;
         color: var(--green);
         font-size: calc(16px * var(--font-scale));
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow: auto;
+        scrollbar-width: thin;
         white-space: nowrap;
       }
 
@@ -454,6 +454,42 @@
         padding: 10px;
       }
 
+      .track-section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        display: grid;
+        gap: 7px;
+        min-width: 0;
+        padding: 8px;
+      }
+
+      .track-section-title {
+        align-items: baseline;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: space-between;
+      }
+
+      .track-section-title strong {
+        color: var(--ink);
+      }
+
+      .track-button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-height: 86px;
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      .track-slider-row {
+        display: grid;
+        gap: 5px;
+      }
+
       .track-controls .mode-buttons,
       .track-controls .chart-actions {
         gap: 6px;
@@ -525,8 +561,9 @@
       .kv strong {
         color: var(--ink);
         display: block;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow: auto;
+        scrollbar-width: thin;
+        text-overflow: clip;
         white-space: nowrap;
       }
 
@@ -1583,28 +1620,38 @@
         const step = Math.max(span / 1200, 0.02);
         const modeButtons = trackModeNames().map((name) => `<button class="${state.trackModeFilter === name ? "active" : ""}" data-track-mode-filter="${escapeHtml(name)}">${name === "all" ? "All modes" : escapeHtml(name)}</button>`).join("");
         return `<div class="track-controls">
-          <div class="toolbar-row"><strong>Track time</strong><span class="range-text" id="track-path-text"></span></div>
-          <div class="mode-buttons">
-            <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Window path</button>
-            <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Full path</button>
-          </div>
-          <div class="mode-buttons">${modeButtons}</div>
-          <div class="chart-actions">
-            <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Slider: window</button>
-            <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Slider: full</button>
-          </div>
-          <label>Plane time <span class="range-text" id="track-marker-text"></span><input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
-          <div class="chart-actions">
-            <button id="track-play-toggle">${state.trackPlaying ? "Pause" : "Play"}</button>
-            <button id="track-marker-path-end">At path end</button>
-            <button id="track-marker-inspect">At inspect</button>
-          </div>
-          <div class="chart-actions">
-            ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
-          </div>
-          <div class="chart-actions">
-            <button id="track-3d-overhead-lock" class="${state.track3dOverheadLock ? "active" : ""}">Overhead lock: ${state.track3dOverheadLock ? "on" : "off"}</button>
-          </div>
+          <section class="track-section">
+            <div class="track-section-title"><strong>Path display</strong><span class="range-text" id="track-path-text"></span></div>
+            <div class="track-button-row">
+              <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Show window path</button>
+              <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Show full path</button>
+            </div>
+            <div class="track-button-row">${modeButtons}</div>
+          </section>
+          <section class="track-section">
+            <div class="track-section-title"><strong>Plane marker</strong><span class="range-text" id="track-marker-text"></span></div>
+            <div class="track-button-row">
+              <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Marker range: window</button>
+              <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Marker range: full</button>
+              <button id="track-marker-path-end">Move to path end</button>
+              <button id="track-marker-inspect">Move to inspect</button>
+            </div>
+            <label class="track-slider-row">Plane time<input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
+          </section>
+          <section class="track-section">
+            <div class="track-section-title"><strong>Playback</strong><span class="range-text">Plane marker only</span></div>
+            <div class="track-button-row">
+              <button id="track-play-toggle">${state.trackPlaying ? "Pause" : "Play"}</button>
+              ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
+            </div>
+          </section>
+          <section class="track-section">
+            <div class="track-section-title"><strong>3D view</strong><span class="range-text" id="track-3d-view-text"></span></div>
+            <div class="track-button-row">
+              <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock="on">Lock overhead</button>
+              <button class="${state.track3dOverheadLock ? "" : "active"}" data-track-3d-lock="off">Free view</button>
+            </div>
+          </section>
         </div>`;
       }
 
@@ -1640,11 +1687,11 @@
           playButton.textContent = state.trackPlaying ? "Pause" : "Play";
           playButton.classList.toggle("active", state.trackPlaying);
         }
-        const overheadLock = document.querySelector("#track-3d-overhead-lock");
-        if (overheadLock) {
-          overheadLock.textContent = `Overhead lock: ${state.track3dOverheadLock ? "on" : "off"}`;
-          overheadLock.classList.toggle("active", state.track3dOverheadLock);
-        }
+        const viewText = document.querySelector("#track-3d-view-text");
+        if (viewText) viewText.textContent = state.track3dOverheadLock ? "locked overhead" : "free rotation";
+        document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
+          button.classList.toggle("active", (button.dataset.track3dLock === "on") === state.track3dOverheadLock);
+        });
       }
 
       function bindTrackControls() {
@@ -1676,13 +1723,15 @@
             updateTrackControls();
           });
         });
-        document.querySelector("#track-3d-overhead-lock")?.addEventListener("click", () => {
-          state.track3dOverheadLock = !state.track3dOverheadLock;
-          for (const config of charts.values()) {
-            if (config.type === "track3d" && config.view) config.view.pitch = constrainTrack3dPitch(config.view.pitch);
-          }
-          state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
-          renderAllCharts();
+        document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.track3dOverheadLock = button.dataset.track3dLock === "on";
+            for (const config of charts.values()) {
+              if (config.type === "track3d" && config.view) config.view.pitch = constrainTrack3dPitch(config.view.pitch);
+            }
+            state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
+            renderAllCharts();
+          });
         });
         document.querySelector("#track-play-toggle")?.addEventListener("click", toggleTrackPlayback);
         document.querySelector("#track-marker-time")?.addEventListener("input", (event) => {
@@ -2599,7 +2648,7 @@
 
       function constrainTrack3dPitch(pitch) {
         const value = finite(pitch) ? pitch : -0.55;
-        return state.track3dOverheadLock ? Math.min(value, 0) : value;
+        return state.track3dOverheadLock ? Math.min(value, -0.08) : value;
       }
 
       function resetTrack3dView(config) {
@@ -3641,7 +3690,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Overhead lock 打开时禁止转到仰视侧；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Lock overhead 打开时禁止转到仰视侧；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },

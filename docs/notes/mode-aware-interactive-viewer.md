@@ -50,6 +50,7 @@ Date: 2026-08-23
 - Release documentation pass: README is now the main Termux operation guide, `docs/project-architecture.md` documents source/generated/viewer boundaries, release/tag/push workflow is documented, and the project was regenerated from a clean generated-data state.
 - Large log viewer fix: browser-side range, stats, 2D track bounds, 3D bounds, and 3D ground-plane calculations no longer use spread-argument `Math.min/Math.max` on log-sized arrays, preventing `Maximum call stack size exceeded` on large files.
 - Track reference overlay update: keep the previously correct 3D aircraft roll/view convention, while adding 2D/3D path time-direction arrows, 2D N/E and north-meter labels, 3D E/N/U plus altitude axes, and Overhead lock to prevent rotating into underside view.
+- Track controls were rebuilt into path display, plane marker, playback, and 3D view groups; Overhead lock now uses explicit Lock/Free buttons and clamps pitch below the edge-on point; scrollable value fields no longer use ellipsis truncation.
 
 ## Current sample
 
@@ -316,6 +317,18 @@ Changes for this pass:
 - Add 3D E/N/U orientation axes and a vertical altitude axis in the 3D scene.
 - Add an `Overhead lock` control: when enabled, 3D pitch is clamped to the overhead side so the view cannot rotate into underside/up-looking perspective.
 - Keep 3D Reset on the previous default oblique view; direction labels and arrows carry the orientation context.
+
+## Track control panel and text overflow v16 plan
+
+Goal: make Track controls understandable and make the 3D overhead lock behave visibly.
+
+Changes for this pass:
+
+- Replace the ambiguous single Overhead lock toggle with explicit `Lock overhead` and `Free view` buttons.
+- Clamp locked 3D pitch to a small negative margin, not exactly zero, so the view cannot reach edge-on/underside perspective.
+- Rebuild Track controls into four groups: path display, plane marker time, playback, and 3D view.
+- Remove ellipsis behavior from value fields that already have scrollable overflow; long values should remain readable through horizontal scrolling.
+- Preserve the previously correct 3D roll/view convention.
 
 ## Next direction
 
