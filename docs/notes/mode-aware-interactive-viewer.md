@@ -344,6 +344,20 @@ Changes for this pass:
 
 - Track overlay visibility and 3D camera modes: path/waypoint display can be toggled individually or together; 3D camera can switch between free, fixed line-of-sight follow, aircraft-relative follow, and track-vector follow while keeping Overhead lock constraints.
 
+## Track camera controls repair v18 plan
+
+Feedback: Lock overhead is not acting like a toggle, 3D camera mode buttons appear to do nothing, and path/waypoint visibility controls are not obvious in the Track UI.
+
+Changes for this pass:
+
+- Replace the two-button overhead lock control with one toggle button so clicking it can both enable and disable the lock.
+- Make 3D camera modes produce obvious camera changes by setting deterministic yaw/pitch presets and then following the plane center where appropriate.
+- Keep manual 3D drag/pinch as the escape hatch back to Free view.
+- Move path/waypoint visibility buttons into a clearer Track overlays row so they are easier to find.
+- Verify with node syntax checking now that nodejs is installed.
+
+- Track camera controls repair: Track controls now render above both track charts, overlay buttons use explicit Chinese labels, overhead limiting is a single toggle that snaps back to the overhead side when enabled, and 3D camera modes switch to deterministic follow views instead of preserving the current view.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

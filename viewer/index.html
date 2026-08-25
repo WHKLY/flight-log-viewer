@@ -1627,20 +1627,25 @@
         const modeButtons = trackModeNames().map((name) => `<button class="${state.trackModeFilter === name ? "active" : ""}" data-track-mode-filter="${escapeHtml(name)}">${name === "all" ? "All modes" : escapeHtml(name)}</button>`).join("");
         const bothVisible = state.trackShowPath && state.trackShowWaypoints;
         const cameraModes = [
-          ["free", "Free view"],
-          ["fixed-los", "Fixed LOS follow"],
-          ["aircraft-relative", "Aircraft-relative follow"],
-          ["track-vector", "Track-vector follow"],
+          ["free", "自由视角"],
+          ["fixed-los", "固定视线跟随"],
+          ["aircraft-relative", "飞机相对跟随"],
+          ["track-vector", "航迹方向跟随"],
         ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-3d-view-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
           <section class="track-section">
+            <div class="track-section-title"><strong>Track overlays</strong><span class="range-text">一键显示/隐藏</span></div>
+            <div class="track-button-row">
+              <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">航迹 ${state.trackShowPath ? "显示" : "隐藏"}</button>
+              <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoint ${state.trackShowWaypoints ? "显示" : "隐藏"}</button>
+              <button class="${bothVisible ? "active" : ""}" data-track-visible="both">${bothVisible ? "一键隐藏航迹+Waypoint" : "一键显示航迹+Waypoint"}</button>
+            </div>
+          </section>
+          <section class="track-section">
             <div class="track-section-title"><strong>Path display</strong><span class="range-text" id="track-path-text"></span></div>
             <div class="track-button-row">
-              <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Show window path</button>
-              <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Show full path</button>
-              <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">Path ${state.trackShowPath ? "on" : "off"}</button>
-              <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoints ${state.trackShowWaypoints ? "on" : "off"}</button>
-              <button data-track-visible="both">${bothVisible ? "Hide path + waypoints" : "Show path + waypoints"}</button>
+              <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">显示当前窗口航迹</button>
+              <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">显示全程航迹</button>
             </div>
             <div class="track-button-row">${modeButtons}</div>
           </section>
@@ -1665,8 +1670,7 @@
             <div class="track-section-title"><strong>3D camera</strong><span class="range-text" id="track-3d-view-text"></span></div>
             <div class="track-button-row">${cameraModes}</div>
             <div class="track-button-row">
-              <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock="on">Lock overhead</button>
-              <button class="${state.track3dOverheadLock ? "" : "active"}" data-track-3d-lock="off">Free view pitch</button>
+              <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock-toggle>俯瞰限制 ${state.track3dOverheadLock ? "开" : "关"}</button>
             </div>
           </section>
         </div>`;
@@ -1696,13 +1700,13 @@
         document.querySelectorAll("[data-track-visible]").forEach((button) => {
           if (button.dataset.trackVisible === "path") {
             button.classList.toggle("active", state.trackShowPath);
-            button.textContent = `Path ${state.trackShowPath ? "on" : "off"}`;
+            button.textContent = `航迹 ${state.trackShowPath ? "显示" : "隐藏"}`;
           } else if (button.dataset.trackVisible === "waypoints") {
             button.classList.toggle("active", state.trackShowWaypoints);
-            button.textContent = `Waypoints ${state.trackShowWaypoints ? "on" : "off"}`;
+            button.textContent = `Waypoint ${state.trackShowWaypoints ? "显示" : "隐藏"}`;
           } else if (button.dataset.trackVisible === "both") {
             button.classList.toggle("active", state.trackShowPath && state.trackShowWaypoints);
-            button.textContent = state.trackShowPath && state.trackShowWaypoints ? "Hide path + waypoints" : "Show path + waypoints";
+            button.textContent = state.trackShowPath && state.trackShowWaypoints ? "一键隐藏航迹+Waypoint" : "一键显示航迹+Waypoint";
           }
         });
         document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
@@ -1721,8 +1725,9 @@
         document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
           button.classList.toggle("active", button.dataset.track3dViewMode === state.track3dViewMode);
         });
-        document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
-          button.classList.toggle("active", (button.dataset.track3dLock === "on") === state.track3dOverheadLock);
+        document.querySelectorAll("[data-track-3d-lock-toggle]").forEach((button) => {
+          button.classList.toggle("active", state.track3dOverheadLock);
+          button.textContent = `俯瞰限制 ${state.track3dOverheadLock ? "开" : "关"}`;
         });
       }
 
@@ -1771,13 +1776,17 @@
         document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
           button.addEventListener("click", () => setTrack3dViewMode(button.dataset.track3dViewMode));
         });
-        document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
+        document.querySelectorAll("[data-track-3d-lock-toggle]").forEach((button) => {
           button.addEventListener("click", () => {
-            state.track3dOverheadLock = button.dataset.track3dLock === "on";
+            state.track3dOverheadLock = !state.track3dOverheadLock;
             for (const config of charts.values()) {
-              if (config.type === "track3d" && config.view) config.view.pitch = constrainTrack3dPitch(config.view.pitch);
+              if (config.type === "track3d" && config.view) {
+                config.view.pitch = constrainTrack3dPitch(config.view.pitch);
+                if (state.track3dOverheadLock) config.view.pitch = Math.min(config.view.pitch, -0.55);
+              }
             }
             state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
+            if (state.track3dOverheadLock) state.track3dView.pitch = Math.min(state.track3dView.pitch, -0.55);
             renderAllCharts();
           });
         });
@@ -2749,13 +2758,11 @@
           const points = projectTrack3d(config).filter((point) => point.kind === "pos");
           const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
           if (nextMode === "fixed-los") {
-            state.track3dFixedView = { yaw: view.yaw, pitch: constrainTrack3dPitch(view.pitch) };
+            state.track3dFixedView = { yaw: -0.72, pitch: constrainTrack3dPitch(-0.55) };
           } else if (nextMode === "aircraft-relative") {
-            const yaw = yawFromAttitude(attitude);
-            state.track3dAircraftViewOffset = { yaw: yaw === null ? 0 : normalizeAngle(view.yaw - yaw), pitch: constrainTrack3dPitch(view.pitch) };
+            state.track3dAircraftViewOffset = { yaw: 0, pitch: constrainTrack3dPitch(-0.55) };
           } else if (nextMode === "track-vector") {
-            const course = trackCourseAt(points, markerTime);
-            state.track3dTrackViewOffset = { yaw: course === null ? 0 : normalizeAngle(view.yaw - course), pitch: constrainTrack3dPitch(view.pitch) };
+            state.track3dTrackViewOffset = { yaw: 0, pitch: constrainTrack3dPitch(-0.55) };
           }
         }
         state.track3dViewMode = nextMode;
@@ -3840,8 +3847,8 @@
             1,
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
-            `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Lock overhead 打开时禁止转到仰视侧；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `${trackControlsHtml()}${chartPanel("track-chart")}${chartPanel("track-3d-chart")}`,
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；俯瞰限制打开时会回到俯瞰侧并禁止转到仰视侧；Reset 3D 恢复自由视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
