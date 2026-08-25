@@ -44,6 +44,7 @@ Date: 2026-08-23
 - Track HUD now uses a PFD-style layout: speed tape on the left, altitude tape on the right, heading tape at the bottom, central attitude horizon, and no separate numeric roll/pitch readout. The HUD block is placed after the waypoint table.
 - Track HUD now overlays logged direct demanded values in magenta: `TECS.spdem` on speed, `TECS.hdem` on altitude, `ATT.DesYaw` on heading, and `ATT.DesRoll/DesPitch` as a central attitude command cue. Waypoint-file targets are not used for these HUD demand markers.
 - Track HUD now uses a yellow triangular PFD/G1000-like fixed aircraft reference and overlays final navigation demands in blue from `CTUN.NavRoll/NavPitch` and `NTUN.NavBrg/TBrg`, while keeping direct controller demands magenta.
+- Track HUD fixed aircraft triangle now places its upper vertex exactly at the HUD center reference point, so the center marker corresponds to the aircraft nose/aim point.
 
 ## Current sample
 
