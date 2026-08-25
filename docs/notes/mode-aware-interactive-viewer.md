@@ -48,6 +48,7 @@ Date: 2026-08-23
 - Track HUD attitude demand cues use aircraft/command direction: actual horizon remains `-Roll`, while magenta direct and blue navigation attitude cues use `+Roll` and positive pitch upward.
 - Track 3D view now draws semi-transparent blue drop lines from the flown path up to the current Plane time down to the ground plane, and 3D pitch drag no longer clamps the viewing angle.
 - Release documentation pass: README is now the main Termux operation guide, `docs/project-architecture.md` documents source/generated/viewer boundaries, release/tag/push workflow is documented, and the project was regenerated from a clean generated-data state.
+- Large log viewer fix: browser-side range, stats, 2D track bounds, 3D bounds, and 3D ground-plane calculations no longer use spread-argument `Math.min/Math.max` on log-sized arrays, preventing `Maximum call stack size exceeded` on large files.
 
 ## Current sample
 
@@ -291,6 +292,16 @@ Changes for this pass:
 - Convert `README.md` into the main operation guide for Termux: install, generate data, serve the viewer, validate, release, and push.
 - Delete ignored generated outputs (`public-data` JSON and Python bytecode), then regenerate and validate from raw files.
 - Prepare the first release tag after git status is clean.
+
+## Large log browser stack fix v14 plan
+
+Goal: make the viewer tolerate larger generated JSON files without browser `Maximum call stack size exceeded` errors.
+
+Changes for this pass:
+
+- Replace `Math.min(...largeArray)` and `Math.max(...largeArray)` patterns with iterative extent helpers.
+- Apply this to full time range, stats summaries, 2D track bounds/default view, 3D bounds, and 3D ground plane height.
+- Keep generated data format unchanged so existing scripts and release workflow continue to work.
 
 ## Next direction
 
