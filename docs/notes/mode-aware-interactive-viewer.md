@@ -46,6 +46,7 @@ Date: 2026-08-23
 - Track HUD now uses a yellow triangular PFD/G1000-like fixed aircraft reference and overlays final navigation demands in blue from `CTUN.NavRoll/NavPitch` and `NTUN.NavBrg/TBrg`, while keeping direct controller demands magenta.
 - Track HUD fixed aircraft triangle now places its upper vertex exactly at the HUD center reference point, so the center marker corresponds to the aircraft nose/aim point.
 - Track HUD attitude demand cues use aircraft/command direction: actual horizon remains `-Roll`, while magenta direct and blue navigation attitude cues use `+Roll` and positive pitch upward.
+- Track 3D view now draws semi-transparent blue drop lines from the flown path up to the current Plane time down to the ground plane, and 3D pitch drag no longer clamps the viewing angle.
 
 ## Current sample
 
@@ -266,6 +267,17 @@ Changes for this pass:
 - Blue attitude cue sources: `CTUN.NavRoll` and `CTUN.NavPitch`.
 - Blue heading cue source: `NTUN.NavBrg`, falling back to `NTUN.TBrg`.
 - Keep magenta for direct controller demands: `TECS.spdem/hdem` and `ATT.DesRoll/DesPitch/DesYaw`.
+
+## Track 3D altitude-reference v12 plan
+
+Goal: make altitude changes easier to judge in the 3D Track view.
+
+Changes for this pass:
+
+- Draw semi-transparent blue vertical drop lines from flown 3D path points to the ground plane.
+- Treat "flown path" as visible POS samples up to the current Plane time, still respecting full/window and Track flight-mode filters.
+- Keep the drop lines visually behind the green path and aircraft marker.
+- Remove the 3D rotation pitch clamp so the user can choose steeper overhead or low viewing angles directly.
 
 ## Next direction
 

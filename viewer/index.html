@@ -2600,6 +2600,23 @@
         ctx.stroke();
       }
 
+      function drawTrack3dGroundDrops(ctx, points, groundZ, config, plot) {
+        const visible = downsample(points, 180);
+        if (!visible.length || !finite(groundZ)) return;
+        ctx.save();
+        ctx.strokeStyle = "rgba(77, 182, 255, 0.32)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        visible.forEach((point) => {
+          const top = track3dProject(point, config, plot);
+          const bottom = track3dProject({ x: point.x, y: point.y, z: groundZ }, config, plot);
+          ctx.moveTo(top.x, top.y);
+          ctx.lineTo(bottom.x, bottom.y);
+        });
+        ctx.stroke();
+        ctx.restore();
+      }
+
       function attitudeVector(row) {
         const roll = -((Number(row?.Roll) || 0) * Math.PI) / 180;
         const pitch = ((Number(row?.Pitch) || 0) * Math.PI) / 180;
@@ -2736,6 +2753,7 @@
         const center = config.center3d || { cx: 0, cy: 0, cz: 0, radius: 80 };
         const gridSize = Math.max(80, center.radius * 1.4);
         const gridZ = Math.min(...(posPoints.length ? posPoints : allPos).map((point) => point.z).concat([0]));
+        const flownPoints = posPoints.filter((point) => point.time_s <= markerTime);
         const gridCorners = [
           { x: center.cx - gridSize, y: center.cy - gridSize, z: gridZ },
           { x: center.cx + gridSize, y: center.cy - gridSize, z: gridZ },
@@ -2753,6 +2771,7 @@
           ctx.stroke();
         }
 
+        drawTrack3dGroundDrops(ctx, flownPoints, gridZ, config, plot);
         drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
         drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4);
 
@@ -3176,7 +3195,7 @@
             state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
             ensureTrack3dView(config, rect.width, rect.height);
             config.view.yaw = state.dragging.yaw + dx * 0.008;
-            config.view.pitch = Math.max(-1.25, Math.min(0.35, state.dragging.pitch + dy * 0.006));
+            config.view.pitch = state.dragging.pitch + dy * 0.006;
             drawTrack3dChart(config);
             return;
           }
