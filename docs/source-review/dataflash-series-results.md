@@ -1,6 +1,6 @@
 # DataFlash Series Extraction Results
 
-Date: 2026-08-23
+Date: 2026-08-25
 
 Generated with:
 
@@ -13,58 +13,54 @@ Generated artifacts, ignored by git:
 ```text
 public-data/series/manifest.json
 public-data/series/track.json
+public-data/series/mission.json
 public-data/series/attitude.json
 public-data/series/navigation.json
 public-data/series/tecs.json
 public-data/series/pid.json
+public-data/series/motion.json
 public-data/series/io.json
 public-data/series/events.json
+public-data/series/modes.json
 ```
 
 ## Source
 
-- DataFlash source: `00000073.BIN`
-- Parser: no-dependency DataFlash reader using `FMT` definitions from the log
+- DataFlash source: first preferred `.BIN` in `data/raw/qq-2026-08-17/`, currently `00000073.BIN` when present.
+- Parser: dependency-light DataFlash reader using `FMT` definitions from the log.
+- Current sample firmware detected from `MSG`: `ArduPlane V4.4.4 (16b78382)`.
 
-## Extracted Counts
+## Extracted Groups
 
-| Message | Count | Group |
-| --- | ---: | --- |
-| `POS` | 2149 | track |
-| `GPS` | 430 | track |
-| `ATT` | 2149 | attitude |
-| `AHR2` | 2149 | attitude |
-| `XKQ` | 4298 | attitude |
-| `CTUN` | 2149 | navigation |
-| `NTUN` | 2149 | navigation |
-| `TECS` | 76 | tecs |
-| `TEC2` | 76 | tecs |
-| `ARSP` | 859 | tecs |
-| `PIDR` | 2149 | pid |
-| `PIDP` | 2149 | pid |
-| `PIDY` | 2149 | pid |
-| `RCOU` | 2149 | io |
-| `RCIN` | 2149 | io |
-| `MODE` | 4 | events |
-| `MSG` | 6310 | events |
+| Group | Messages | Viewer use |
+| --- | --- | --- |
+| `track` | `POS`, `GPS` | 2D/3D path, speed, position, altitude. |
+| `mission` | `CMD`, `MAVC`, `EV`, `TERR`, `ORGN` | Mission task context and events. |
+| `attitude` | `ATT`, `AHR2`, `XKQ` | Actual/demanded attitude and orientation evidence. |
+| `navigation` | `CTUN`, `NTUN` | L1/navigation demand and cross-track/bearing evidence. |
+| `tecs` | `TECS`, `TEC2`, `ARSP` | Energy-control speed/height/pitch/throttle evidence. |
+| `pid` | `PIDR`, `PIDP`, `PIDY` | Rate-loop target/actual/error/P/I/D/FF data. |
+| `motion` | `IMU*`, `ACC*`, `GYR*`, `VIBE`, `RATE`, `XKF*`, `NKF*` | Acceleration, gyro, vibration, estimator and motion data. |
+| `io` | `RCOU`, `RCIN` | Pilot input and actuator/throttle output values. |
+| `events` | `MODE`, `MSG` | Mode and text/event context. |
+| `modes` | `MODE`, `MSG` | Mapped mode segments and compatibility metadata. |
 
-## Quality Check
+## Quality Rules
 
-The first decoded samples are in expected ranges:
+- Decode fields according to the log's embedded `FMT` records.
+- Preserve raw message rows where practical and add `time_s` from `TimeUS`.
+- If a message family is absent, write an empty group rather than blocking the viewer.
+- Unknown Plane mode numbers display as `MODE_<number>` instead of being guessed.
+- Generated series are rebuildable and should not be committed by default.
 
-- `POS.Lat/Lng` decode to approximately `45.9157, 126.4526`.
-- `ATT.Roll/Pitch/Yaw` decode to degrees, with demanded and actual fields present.
-- `NTUN` includes distance, target bearing, nav bearing, altitude error, crosstrack error, and target lat/lng.
-- `TECS/TEC2` are present but low-rate in this log, with only `76` records each.
-- `PIDR/PIDP/PIDY` include target, actual, error, P/I/D/FF and limit fields.
-- `RCOU/RCIN` expose channel values for output and pilot input panels.
+## Viewer Dependencies
 
-## Next Step
+The current viewer expects these generated files but tolerates missing files with empty fallbacks:
 
-Use the generated series files to upgrade `viewer/index.html` from a summary page into the first real dashboard:
+```text
+public-data/dataset-summary.json
+public-data/log-inspection.json
+public-data/series/*.json
+```
 
-- 2D track from `track.json`.
-- Roll and pitch demanded vs actual from `attitude.json`.
-- L1/navigation panel from `navigation.json`.
-- TECS panel from `tecs.json`, with a warning that TECS data is lower rate.
-- PID and output panels from `pid.json` and `io.json`.
+A waypoint-only or parameter-only package can still open after `summarize_dataset.py`; missing log-derived panels remain empty or show missing values.

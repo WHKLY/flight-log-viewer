@@ -47,6 +47,7 @@ Date: 2026-08-23
 - Track HUD fixed aircraft triangle now places its upper vertex exactly at the HUD center reference point, so the center marker corresponds to the aircraft nose/aim point.
 - Track HUD attitude demand cues use aircraft/command direction: actual horizon remains `-Roll`, while magenta direct and blue navigation attitude cues use `+Roll` and positive pitch upward.
 - Track 3D view now draws semi-transparent blue drop lines from the flown path up to the current Plane time down to the ground plane, and 3D pitch drag no longer clamps the viewing angle.
+- Release documentation pass: README is now the main Termux operation guide, `docs/project-architecture.md` documents source/generated/viewer boundaries, release/tag/push workflow is documented, and the project was regenerated from a clean generated-data state.
 
 ## Current sample
 
@@ -278,6 +279,18 @@ Changes for this pass:
 - Treat "flown path" as visible POS samples up to the current Plane time, still respecting full/window and Track flight-mode filters.
 - Keep the drop lines visually behind the green path and aircraft marker.
 - Remove the 3D rotation pitch clamp so the user can choose steeper overhead or low viewing angles directly.
+
+## Release documentation and clean verification v13 plan
+
+Goal: prepare the first release candidate from a clean generated-data state.
+
+Changes for this pass:
+
+- Review user-facing documentation and update only documents whose instructions or current-state descriptions are stale.
+- Add a project architecture document that separates raw data, generated viewer data, scripts, static viewer code, and source-review notes.
+- Convert `README.md` into the main operation guide for Termux: install, generate data, serve the viewer, validate, release, and push.
+- Delete ignored generated outputs (`public-data` JSON and Python bytecode), then regenerate and validate from raw files.
+- Prepare the first release tag after git status is clean.
 
 ## Next direction
 

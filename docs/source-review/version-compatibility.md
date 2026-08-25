@@ -111,10 +111,21 @@ The viewer should show a small compatibility banner:
 
 If versions differ, the banner should be informational, not blocking.
 
-## Immediate Implementation Tasks
+## Current Implementation Status
 
-1. Generate `modes.json` from `MODE` rows and map mode numbers to names.
-2. Extract firmware text from `MSG`, especially strings like `ArduPlane V4.4.4 (...)`.
-3. Add compatibility metadata to generated manifest.
-4. Update viewer mode bands to use mapped names and show unknown modes explicitly.
-5. Add warning text when explanation source version differs from log firmware.
+Implemented:
+
+- `extract_dataflash_series.py` generates `modes.json` from `MODE` and `MSG` records.
+- Plane mode numbers are mapped through an explicit Plane default mode table.
+- Unknown mode numbers remain visible as `MODE_<number>`.
+- Firmware text is extracted from `MSG` when available.
+- `manifest.json` records compatibility metadata including log firmware, parser schema source, mode-map source, and explanation source.
+- The viewer can load partial generated datasets with empty fallbacks when some JSON files are missing.
+- Mode bands and mode-focus buttons use generated mode segment data.
+
+Still useful later:
+
+1. Add firmware-specific mode maps when logs are not Plane or when mode tables diverge.
+2. Add parameter metadata source/version per parameter explanation.
+3. Add optional source checkouts for exact ArduPlane 4.4.4 and 4.7 comparisons.
+4. Keep warning text concise so compatibility context does not dominate the tablet UI.

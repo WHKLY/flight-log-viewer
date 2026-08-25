@@ -21,69 +21,93 @@ git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
 ```
 
-For GitHub HTTPS remotes, use a GitHub token when prompted for password. For SSH remotes, generate or reuse an SSH key:
-
-```bash
-ssh-keygen -t ed25519 -C "you@example.com"
-cat ~/.ssh/id_ed25519.pub
-```
-
-Then add the public key to GitHub.
-
-## Initialize the Project
-
-```bash
-cd ~/work/projects/python/flight-log-viewer
-git init
-git branch -M main
-git status
-```
-
 ## Daily Work Loop
 
 ```bash
 git status
-git add .
+git diff
+git add README.md docs viewer scripts src pyproject.toml data/README.md .gitignore
 git commit -m "Describe the change"
 ```
 
-Before a risky change:
+Before risky work, create a branch:
 
 ```bash
 git switch -c feature/some-change
 ```
 
-After checking changes:
+## Data Policy
 
-```bash
-git diff
-git diff --staged
+Do not commit raw flight logs or generated viewer JSON by default:
+
+```text
+data/raw/
+public-data/*.json
+public-data/series/
+docs/source-review/extracted/
 ```
 
-## Remote Repository
+These paths are ignored by `.gitignore`. Keep `public-data/.gitkeep` tracked so the generated-data directory exists after clone.
 
-After creating an empty GitHub repo:
+## Release Check
+
+Run from the project root:
+
+```bash
+python3 -m py_compile scripts/extract_dataflash_series.py scripts/inspect_logs.py scripts/summarize_dataset.py
+python3 scripts/summarize_dataset.py
+python3 scripts/inspect_logs.py
+python3 scripts/extract_dataflash_series.py
+git diff --check
+git status --short
+```
+
+If the local server is running:
+
+```bash
+curl -I http://127.0.0.1:8000/viewer/index.html
+```
+
+## First Release Tag
+
+Use semantic versioning. For the first release:
+
+```bash
+git tag -a v0.1.0 -m "First tablet flight log viewer release"
+git tag --list
+```
+
+If a tag was created incorrectly before pushing, delete and recreate it locally:
+
+```bash
+git tag -d v0.1.0
+```
+
+Do not delete a pushed tag unless you intentionally coordinate that change.
+
+## GitHub Remote
+
+After creating an empty GitHub repository, add one remote.
+
+SSH:
 
 ```bash
 git remote add origin git@github.com:YOUR_USER/flight-log-viewer.git
 git push -u origin main
+git push origin v0.1.0
 ```
 
-If using HTTPS:
+HTTPS:
 
 ```bash
 git remote add origin https://github.com/YOUR_USER/flight-log-viewer.git
 git push -u origin main
+git push origin v0.1.0
 ```
 
-## Data Policy
+For HTTPS, GitHub requires a personal access token instead of an account password. For SSH, add the tablet's public key to GitHub:
 
-Do not commit raw flight logs by default:
-
-- `.BIN`
-- `.tlog`
-- `.rlog`
-- duplicate downloaded archives
-
-Keep raw files under `data/raw/` locally and commit only small derived samples or metadata summaries unless intentionally sharing a dataset.
-
+```bash
+ssh-keygen -t ed25519 -C "you@example.com"
+cat ~/.ssh/id_ed25519.pub
+```
