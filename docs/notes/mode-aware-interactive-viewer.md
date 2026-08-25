@@ -42,6 +42,7 @@ Date: 2026-08-23
 - Track HUD now has a hide/show toggle and renders a graphical attitude indicator with sky/ground horizon, pitch ladder, roll pointer, heading cue, and missing-attitude state. Numeric speed/altitude/mode readouts remain below the graphical HUD.
 - Track HUD placement now follows the 3D view note and appears before the waypoint table, so it is visually aligned with the 3D track area rather than the top of the right-side panel.
 - Track HUD now uses a PFD-style layout: speed tape on the left, altitude tape on the right, heading tape at the bottom, central attitude horizon, and no separate numeric roll/pitch readout. The HUD block is placed after the waypoint table.
+- Track HUD now overlays logged direct demanded values in magenta: `TECS.spdem` on speed, `TECS.hdem` on altitude, `ATT.DesYaw` on heading, and `ATT.DesRoll/DesPitch` as a central attitude command cue. Waypoint-file targets are not used for these HUD demand markers.
 
 ## Current sample
 
@@ -238,6 +239,18 @@ Changes for this pass:
 - Draw speed on the left side of the HUD graphic, altitude on the right, and heading along the bottom.
 - Keep the attitude horizon in the center but remove separate numeric roll/pitch readouts.
 - Keep both GPS ground speed and ARSP airspeed visible, with airspeed primary when available and GPS speed as a secondary speed cue.
+
+## HUD demanded-value overlay v10 plan
+
+Goal: show autopilot/controller demanded values in magenta on the Track HUD, following aviation display convention.
+
+Changes for this pass:
+
+- Use only logged direct demand/control fields, not waypoint-file targets.
+- Speed target source: `TECS.spdem` when available.
+- Altitude target source: `TECS.hdem` when available.
+- Attitude target source: `ATT.DesRoll`, `ATT.DesPitch`, and `ATT.DesYaw` when available.
+- Draw these target cues in magenta on the speed tape, altitude tape, heading tape, and central attitude display.
 
 ## Next direction
 

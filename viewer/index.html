@@ -1690,7 +1690,7 @@
         return finite(value) ? value.toFixed(digits) : "---";
       }
 
-      function drawHudTape(ctx, x, y, width, height, value, label, unit, align = "left") {
+      function drawHudTape(ctx, x, y, width, height, value, label, unit, align = "left", targetValue = null) {
         ctx.save();
         ctx.fillStyle = "rgba(16, 25, 20, 0.78)";
         ctx.strokeStyle = "rgba(247, 255, 249, 0.74)";
@@ -1727,11 +1727,33 @@
             }
             ctx.stroke();
           }
+          if (finite(targetValue)) {
+            const step = unit === "m" ? 10 : 2;
+            const targetY = clamp(y + height / 2 - ((targetValue - value) / step) * 19, y + 18, y + height - 18);
+            ctx.fillStyle = "#ff4dff";
+            ctx.strokeStyle = "#ff4dff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (align === "left") {
+              ctx.moveTo(x + width - 4, targetY);
+              ctx.lineTo(x + width - 16, targetY - 6);
+              ctx.lineTo(x + width - 16, targetY + 6);
+            } else {
+              ctx.moveTo(x + 4, targetY);
+              ctx.lineTo(x + 16, targetY - 6);
+              ctx.lineTo(x + 16, targetY + 6);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.font = canvasFont(9);
+            ctx.textAlign = align === "left" ? "right" : "left";
+            ctx.fillText(`T ${hudNumber(targetValue, 0)}`, align === "left" ? x + width - 18 : x + 18, targetY - 8);
+          }
         }
         ctx.restore();
       }
 
-      function drawHeadingTape(ctx, x, y, width, height, heading) {
+      function drawHeadingTape(ctx, x, y, width, height, heading, targetHeading = null) {
         ctx.save();
         ctx.fillStyle = "rgba(16, 25, 20, 0.78)";
         ctx.strokeStyle = "rgba(247, 255, 249, 0.74)";
@@ -1756,6 +1778,20 @@
             ctx.lineTo(tx, y + (offset % 30 === 0 ? 29 : 24));
             ctx.stroke();
             if (offset % 30 === 0) ctx.fillText(String(h).padStart(3, "0"), tx, y + 39);
+          }
+          if (finite(targetHeading)) {
+            let delta = ((targetHeading - heading + 540) % 360) - 180;
+            delta = clamp(delta, -40, 40);
+            const tx = center + delta * (width / 80);
+            ctx.strokeStyle = "#ff4dff";
+            ctx.fillStyle = "#ff4dff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(tx, y + height - 7);
+            ctx.lineTo(tx - 6, y + height - 19);
+            ctx.lineTo(tx + 6, y + height - 19);
+            ctx.closePath();
+            ctx.fill();
           }
           ctx.fillStyle = "#f2c36b";
           ctx.beginPath();
@@ -1844,6 +1880,25 @@
           ctx.moveTo(cx, cy - 7);
           ctx.lineTo(cx, cy + 7);
           ctx.stroke();
+          if (finite(values.desRoll) || finite(values.desPitch)) {
+            const targetRoll = ((finite(values.desRoll) ? values.desRoll : values.roll) * Math.PI) / 180;
+            const targetPitchOffset = clamp(finite(values.desPitch) ? values.desPitch : values.pitch, -45, 45) * (radius / 28);
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(-targetRoll);
+            ctx.translate(0, targetPitchOffset);
+            ctx.strokeStyle = "#ff4dff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-radius * 0.28, 0);
+            ctx.lineTo(-radius * 0.08, 0);
+            ctx.moveTo(radius * 0.08, 0);
+            ctx.lineTo(radius * 0.28, 0);
+            ctx.moveTo(0, -radius * 0.12);
+            ctx.lineTo(0, radius * 0.12);
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate(roll);
@@ -1857,15 +1912,16 @@
           ctx.restore();
         }
         const displaySpeed = finite(values.airSpeed) ? values.airSpeed : values.groundSpeed;
-        drawHudTape(ctx, 4, 10, tapeW, height - headingH - 18, displaySpeed, finite(values.airSpeed) ? "IAS" : "GS", "m/s", "left");
+        const displayTargetSpeed = finite(values.targetSpeed) ? values.targetSpeed : null;
+        drawHudTape(ctx, 4, 10, tapeW, height - headingH - 18, displaySpeed, finite(values.airSpeed) ? "IAS" : "GS", "m/s", "left", displayTargetSpeed);
         if (finite(values.airSpeed) && finite(values.groundSpeed)) {
           ctx.fillStyle = "#b7c6bd";
           ctx.font = canvasFont(9);
           ctx.textAlign = "center";
           ctx.fillText(`GS ${hudNumber(values.groundSpeed, 1)}`, 4 + tapeW / 2, height - headingH - 12);
         }
-        drawHudTape(ctx, width - tapeW - 4, 10, tapeW, height - headingH - 18, values.altitude, "ALT", "m", "right");
-        drawHeadingTape(ctx, centerLeft, height - headingH + 4, centerRight - centerLeft, headingH - 8, values.heading);
+        drawHudTape(ctx, width - tapeW - 4, 10, tapeW, height - headingH - 18, values.altitude, "ALT", "m", "right", values.targetAltitude);
+        drawHeadingTape(ctx, centerLeft, height - headingH + 4, centerRight - centerLeft, headingH - 8, values.heading, values.targetHeading);
       }
 
       function updateTrackHud() {
@@ -1888,34 +1944,42 @@
         const posSample = nearestRow(trackConfig?.posRows || track3dConfig?.posRows || [], time);
         const gpsSample = nearestRow(trackConfig?.gpsRows || track3dConfig?.gpsRows || [], time);
         const airSample = nearestRow(trackConfig?.arspRows || track3dConfig?.arspRows || [], time);
+        const tecsSample = nearestRow(trackConfig?.tecsRows || track3dConfig?.tecsRows || [], time);
         const attSample = nearestRow(track3dConfig?.attitudeRows || trackConfig?.attitudeRows || [], time);
         const pos = posSample?.row || {};
         const gps = gpsSample?.row || {};
         const air = airSample?.row || {};
+        const tecs = tecsSample?.row || {};
         const att = attSample?.row || {};
         const mode = findModeAt(time);
         const roll = numericFrom(att, ["Roll"]);
         const pitch = numericFrom(att, ["Pitch"]);
         const heading = numericFrom(att, ["Yaw"]) ?? numericFrom(gps, ["GCrs", "Yaw"]);
+        const targetHeading = numericFrom(att, ["DesYaw"]);
         const altitude = numericFrom(pos, ["RelHomeAlt", "Alt", "RelOriginAlt"]);
+        const targetAltitude = numericFrom(tecs, ["hdem"]);
         const groundSpeed = numericFrom(gps, ["Spd"]);
         const airSpeed = numericFrom(air, ["Airspeed"]);
+        const targetSpeed = numericFrom(tecs, ["spdem"]);
+        const desRoll = numericFrom(att, ["DesRoll"]);
+        const desPitch = numericFrom(att, ["DesPitch"]);
         const gpsInfo = gpsSample ? `GPS ${gps.Status ?? "?"} | sats ${gps.NSats ?? "?"}` : "GPS missing";
         const ages = [
           ["ATT", sampleAge(attSample, time)],
           ["POS", sampleAge(posSample, time)],
           ["GPS", sampleAge(gpsSample, time)],
           ["ARSP", sampleAge(airSample, time)],
+          ["TECS", sampleAge(tecsSample, time)],
         ].map(([name, age]) => `${name} ${finite(age) ? fmt.format(age) + "s" : "missing"}`).join(" | ");
         node.innerHTML = `<canvas class="hud-canvas" id="track-hud-canvas"></canvas><div class="kv-grid">
           ${hudKv("time", `${fmt.format(time)}s`)}
           ${hudKv("mode", mode?.name || "unknown")}
           ${hudKv("GPS speed", hudValue(groundSpeed, " m/s"))}
           ${hudKv("airspeed", hudValue(airSpeed, " m/s"))}
-          ${hudKv("altitude", hudValue(altitude, " m"))}
+          ${hudKv("altitude", `${hudValue(altitude, " m")} / T ${hudValue(targetAltitude, " m")}`)}
           ${hudKv("GPS info", gpsInfo)}
-        </div><div class="hud-note" title="${escapeHtml(ages)}">sample age: ${escapeHtml(ages)}</div>`;
-        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading, altitude, groundSpeed, airSpeed });
+        </div><div class="hud-note" title="${escapeHtml(ages)}">magenta targets: TECS.spdem/hdem, ATT.DesRoll/DesPitch/DesYaw | sample age: ${escapeHtml(ages)}</div>`;
+        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading, altitude, groundSpeed, airSpeed, targetSpeed, targetAltitude, targetHeading, desRoll, desPitch });
       }
 
       function renderToolbar() {
@@ -3426,8 +3490,8 @@
               { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: state.fullRange.start + i * 8, y: Number(w.alt), row: w })) },
             ],
           },
-          { id: "track-chart", type: "track", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, waypointRows: summary.waypoints },
-          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
+          { id: "track-chart", type: "track", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, waypointRows: summary.waypoints },
+          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
           {
             id: "l1-chart",
             type: "line",
