@@ -43,6 +43,7 @@ Date: 2026-08-23
 - Track HUD placement now follows the 3D view note and appears before the waypoint table, so it is visually aligned with the 3D track area rather than the top of the right-side panel.
 - Track HUD now uses a PFD-style layout: speed tape on the left, altitude tape on the right, heading tape at the bottom, central attitude horizon, and no separate numeric roll/pitch readout. The HUD block is placed after the waypoint table.
 - Track HUD now overlays logged direct demanded values in magenta: `TECS.spdem` on speed, `TECS.hdem` on altitude, `ATT.DesYaw` on heading, and `ATT.DesRoll/DesPitch` as a central attitude command cue. Waypoint-file targets are not used for these HUD demand markers.
+- Track HUD now uses a yellow triangular PFD/G1000-like fixed aircraft reference and overlays final navigation demands in blue from `CTUN.NavRoll/NavPitch` and `NTUN.NavBrg/TBrg`, while keeping direct controller demands magenta.
 
 ## Current sample
 
@@ -251,6 +252,18 @@ Changes for this pass:
 - Altitude target source: `TECS.hdem` when available.
 - Attitude target source: `ATT.DesRoll`, `ATT.DesPitch`, and `ATT.DesYaw` when available.
 - Draw these target cues in magenta on the speed tape, altitude tape, heading tape, and central attitude display.
+
+## HUD navigation-demand overlay v11 plan
+
+Goal: distinguish direct controller demands from final navigation demand cues in the Track HUD.
+
+Changes for this pass:
+
+- Change the fixed aircraft reference in the central HUD attitude display to a G1000/PFD-like yellow triangular symbol.
+- Add blue final-navigation demand cues from logged navigation outputs, not waypoint-file targets.
+- Blue attitude cue sources: `CTUN.NavRoll` and `CTUN.NavPitch`.
+- Blue heading cue source: `NTUN.NavBrg`, falling back to `NTUN.TBrg`.
+- Keep magenta for direct controller demands: `TECS.spdem/hdem` and `ATT.DesRoll/DesPitch/DesYaw`.
 
 ## Next direction
 

@@ -1753,7 +1753,7 @@
         ctx.restore();
       }
 
-      function drawHeadingTape(ctx, x, y, width, height, heading, targetHeading = null) {
+      function drawHeadingTape(ctx, x, y, width, height, heading, targetHeading = null, navHeading = null) {
         ctx.save();
         ctx.fillStyle = "rgba(16, 25, 20, 0.78)";
         ctx.strokeStyle = "rgba(247, 255, 249, 0.74)";
@@ -1779,10 +1779,25 @@
             ctx.stroke();
             if (offset % 30 === 0) ctx.fillText(String(h).padStart(3, "0"), tx, y + 39);
           }
-          if (finite(targetHeading)) {
-            let delta = ((targetHeading - heading + 540) % 360) - 180;
+          const headingBugX = (target) => {
+            let delta = ((target - heading + 540) % 360) - 180;
             delta = clamp(delta, -40, 40);
-            const tx = center + delta * (width / 80);
+            return center + delta * (width / 80);
+          };
+          if (finite(navHeading)) {
+            const tx = headingBugX(navHeading);
+            ctx.strokeStyle = "#4db6ff";
+            ctx.fillStyle = "#4db6ff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(tx, y + 17);
+            ctx.lineTo(tx - 6, y + 29);
+            ctx.lineTo(tx + 6, y + 29);
+            ctx.closePath();
+            ctx.fill();
+          }
+          if (finite(targetHeading)) {
+            const tx = headingBugX(targetHeading);
             ctx.strokeStyle = "#ff4dff";
             ctx.fillStyle = "#ff4dff";
             ctx.lineWidth = 2;
@@ -1870,16 +1885,23 @@
           ctx.beginPath();
           ctx.arc(cx, cy, radius, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.strokeStyle = "#f2c36b";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(cx - radius * 0.45, cy);
-          ctx.lineTo(cx - radius * 0.12, cy);
-          ctx.moveTo(cx + radius * 0.12, cy);
-          ctx.lineTo(cx + radius * 0.45, cy);
-          ctx.moveTo(cx, cy - 7);
-          ctx.lineTo(cx, cy + 7);
-          ctx.stroke();
+          if (finite(values.navRoll) || finite(values.navPitch)) {
+            const navRoll = ((finite(values.navRoll) ? values.navRoll : values.roll) * Math.PI) / 180;
+            const navPitchOffset = clamp(finite(values.navPitch) ? values.navPitch : values.pitch, -45, 45) * (radius / 28);
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(-navRoll);
+            ctx.translate(0, navPitchOffset);
+            ctx.strokeStyle = "#4db6ff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-radius * 0.24, 0);
+            ctx.lineTo(radius * 0.24, 0);
+            ctx.moveTo(0, -radius * 0.11);
+            ctx.lineTo(0, radius * 0.11);
+            ctx.stroke();
+            ctx.restore();
+          }
           if (finite(values.desRoll) || finite(values.desPitch)) {
             const targetRoll = ((finite(values.desRoll) ? values.desRoll : values.roll) * Math.PI) / 180;
             const targetPitchOffset = clamp(finite(values.desPitch) ? values.desPitch : values.pitch, -45, 45) * (radius / 28);
@@ -1899,6 +1921,21 @@
             ctx.stroke();
             ctx.restore();
           }
+          ctx.strokeStyle = "#f2c36b";
+          ctx.fillStyle = "#f2c36b";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(cx - radius * 0.47, cy);
+          ctx.lineTo(cx - radius * 0.16, cy);
+          ctx.moveTo(cx + radius * 0.16, cy);
+          ctx.lineTo(cx + radius * 0.47, cy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 9);
+          ctx.lineTo(cx - 9, cy + 7);
+          ctx.lineTo(cx + 9, cy + 7);
+          ctx.closePath();
+          ctx.fill();
           ctx.save();
           ctx.translate(cx, cy);
           ctx.rotate(roll);
@@ -1921,7 +1958,7 @@
           ctx.fillText(`GS ${hudNumber(values.groundSpeed, 1)}`, 4 + tapeW / 2, height - headingH - 12);
         }
         drawHudTape(ctx, width - tapeW - 4, 10, tapeW, height - headingH - 18, values.altitude, "ALT", "m", "right", values.targetAltitude);
-        drawHeadingTape(ctx, centerLeft, height - headingH + 4, centerRight - centerLeft, headingH - 8, values.heading, values.targetHeading);
+        drawHeadingTape(ctx, centerLeft, height - headingH + 4, centerRight - centerLeft, headingH - 8, values.heading, values.targetHeading, values.navHeading);
       }
 
       function updateTrackHud() {
@@ -1945,11 +1982,15 @@
         const gpsSample = nearestRow(trackConfig?.gpsRows || track3dConfig?.gpsRows || [], time);
         const airSample = nearestRow(trackConfig?.arspRows || track3dConfig?.arspRows || [], time);
         const tecsSample = nearestRow(trackConfig?.tecsRows || track3dConfig?.tecsRows || [], time);
+        const navSample = nearestRow(trackConfig?.navRows || track3dConfig?.navRows || [], time);
+        const ntunSample = nearestRow(trackConfig?.ntunRows || track3dConfig?.ntunRows || [], time);
         const attSample = nearestRow(track3dConfig?.attitudeRows || trackConfig?.attitudeRows || [], time);
         const pos = posSample?.row || {};
         const gps = gpsSample?.row || {};
         const air = airSample?.row || {};
         const tecs = tecsSample?.row || {};
+        const nav = navSample?.row || {};
+        const ntun = ntunSample?.row || {};
         const att = attSample?.row || {};
         const mode = findModeAt(time);
         const roll = numericFrom(att, ["Roll"]);
@@ -1963,6 +2004,9 @@
         const targetSpeed = numericFrom(tecs, ["spdem"]);
         const desRoll = numericFrom(att, ["DesRoll"]);
         const desPitch = numericFrom(att, ["DesPitch"]);
+        const navRoll = numericFrom(nav, ["NavRoll"]);
+        const navPitch = numericFrom(nav, ["NavPitch"]);
+        const navHeading = numericFrom(ntun, ["NavBrg", "TBrg"]);
         const gpsInfo = gpsSample ? `GPS ${gps.Status ?? "?"} | sats ${gps.NSats ?? "?"}` : "GPS missing";
         const ages = [
           ["ATT", sampleAge(attSample, time)],
@@ -1970,6 +2014,8 @@
           ["GPS", sampleAge(gpsSample, time)],
           ["ARSP", sampleAge(airSample, time)],
           ["TECS", sampleAge(tecsSample, time)],
+          ["CTUN", sampleAge(navSample, time)],
+          ["NTUN", sampleAge(ntunSample, time)],
         ].map(([name, age]) => `${name} ${finite(age) ? fmt.format(age) + "s" : "missing"}`).join(" | ");
         node.innerHTML = `<canvas class="hud-canvas" id="track-hud-canvas"></canvas><div class="kv-grid">
           ${hudKv("time", `${fmt.format(time)}s`)}
@@ -1977,9 +2023,10 @@
           ${hudKv("GPS speed", hudValue(groundSpeed, " m/s"))}
           ${hudKv("airspeed", hudValue(airSpeed, " m/s"))}
           ${hudKv("altitude", `${hudValue(altitude, " m")} / T ${hudValue(targetAltitude, " m")}`)}
+          ${hudKv("nav demand", `R ${hudValue(navRoll, " deg")} / P ${hudValue(navPitch, " deg")}`)}
           ${hudKv("GPS info", gpsInfo)}
-        </div><div class="hud-note" title="${escapeHtml(ages)}">magenta targets: TECS.spdem/hdem, ATT.DesRoll/DesPitch/DesYaw | sample age: ${escapeHtml(ages)}</div>`;
-        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading, altitude, groundSpeed, airSpeed, targetSpeed, targetAltitude, targetHeading, desRoll, desPitch });
+        </div><div class="hud-note" title="${escapeHtml(ages)}">magenta direct: TECS.spdem/hdem, ATT.DesRoll/DesPitch/DesYaw | blue nav: CTUN.NavRoll/NavPitch, NTUN.NavBrg/TBrg | sample age: ${escapeHtml(ages)}</div>`;
+        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading, altitude, groundSpeed, airSpeed, targetSpeed, targetAltitude, targetHeading, desRoll, desPitch, navRoll, navPitch, navHeading });
       }
 
       function renderToolbar() {
@@ -3490,8 +3537,8 @@
               { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: state.fullRange.start + i * 8, y: Number(w.alt), row: w })) },
             ],
           },
-          { id: "track-chart", type: "track", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, waypointRows: summary.waypoints },
-          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
+          { id: "track-chart", type: "track", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, navRows: navigation.messages.CTUN, ntunRows: navigation.messages.NTUN, waypointRows: summary.waypoints },
+          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, tecsRows: tecs.messages.TECS, navRows: navigation.messages.CTUN, ntunRows: navigation.messages.NTUN, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
           {
             id: "l1-chart",
             type: "line",
