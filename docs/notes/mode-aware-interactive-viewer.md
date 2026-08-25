@@ -358,6 +358,31 @@ Changes for this pass:
 
 - Track camera controls repair: Track controls now render above both track charts, overlay buttons use explicit Chinese labels, overhead limiting is a single toggle that snaps back to the overhead side when enabled, and 3D camera modes switch to deterministic follow views instead of preserving the current view.
 
+## Track camera dataset and decoupling v19 plan
+
+Feedback: camera mode buttons are visible but unusable because `data-track-3d-view-mode` does not map to `dataset.track3dViewMode`; overhead lock can be toggled visually but still does not reliably constrain the actual 3D view. The single `index.html` file is also too coupled.
+
+Changes for this pass:
+
+- Rename the camera mode attribute to `data-track-camera-mode` and read it through `dataset.trackCameraMode`.
+- Make overhead lock a projection-level constraint so locked pitch is enforced wherever 3D projection or camera state is applied.
+- Extract pure 3D camera helpers into `viewer/js/track-camera.js` and keep the page script responsible for state wiring and drawing only.
+- Keep the refactor bounded: do not split renderers yet, but create a stable seam for later Track module extraction.
+- Verify with node syntax check plus jsdom click simulation before committing.
+
+- Track camera dataset and decoupling: camera mode buttons now use `data-track-camera-mode`, pure camera math moved to `viewer/js/track-camera.js`, Track controls use delegated click handling, and 3D projection applies the overhead pitch constraint at draw time.
+
+## Track overhead lock pitch clamp v20 plan
+
+Feedback: overhead lock can be toggled but still allows the 3D view to flip past the overhead side because pitch is only clamped on one side.
+
+Changes for this pass:
+
+- Replace one-sided overhead pitch limiting with a bounded pitch interval.
+- Keep the current default view direction but prevent dragging beyond the vertical flip region.
+- Verify camera math directly with node and re-run jsdom click regression.
+- Do not commit until browser behavior is confirmed.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

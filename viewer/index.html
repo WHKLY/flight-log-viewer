@@ -847,6 +847,7 @@
       </section>
     </main>
 
+    <script src="js/track-camera.js"></script>
     <script>
       const colors = {
         green: "#0f6a55",
@@ -1631,7 +1632,7 @@
           ["fixed-los", "固定视线跟随"],
           ["aircraft-relative", "飞机相对跟随"],
           ["track-vector", "航迹方向跟随"],
-        ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-3d-view-mode="${mode}">${label}</button>`).join("");
+        ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-camera-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
           <section class="track-section">
             <div class="track-section-title"><strong>Track overlays</strong><span class="range-text">一键显示/隐藏</span></div>
@@ -1722,8 +1723,8 @@
         }
         const viewText = document.querySelector("#track-3d-view-text");
         if (viewText) viewText.textContent = `${track3dViewModeLabel(state.track3dViewMode)} | ${state.track3dOverheadLock ? "locked overhead" : "free pitch"}`;
-        document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
-          button.classList.toggle("active", button.dataset.track3dViewMode === state.track3dViewMode);
+        document.querySelectorAll("[data-track-camera-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.trackCameraMode === state.track3dViewMode);
         });
         document.querySelectorAll("[data-track-3d-lock-toggle]").forEach((button) => {
           button.classList.toggle("active", state.track3dOverheadLock);
@@ -1732,23 +1733,30 @@
       }
 
       function bindTrackControls() {
-        document.querySelectorAll("[data-track-path-mode]").forEach((button) => {
-          button.addEventListener("click", () => {
+        const controls = document.querySelector(".track-controls");
+        if (!controls || controls.dataset.bound === "true") return;
+        controls.dataset.bound = "true";
+
+        controls.addEventListener("click", (event) => {
+          const button = event.target.closest("button");
+          if (!button || !controls.contains(button)) return;
+
+          if (button.dataset.trackPathMode) {
             stopTrackPlayback();
             state.trackPathMode = button.dataset.trackPathMode;
             updateTrackControls();
             renderAllCharts();
-          });
-        });
-        document.querySelectorAll("[data-track-mode-filter]").forEach((button) => {
-          button.addEventListener("click", () => {
+            return;
+          }
+
+          if (button.dataset.trackModeFilter) {
             stopTrackPlayback();
             state.trackModeFilter = button.dataset.trackModeFilter;
             setTrackMarkerTime(trackMarkerTime());
-          });
-        });
-        document.querySelectorAll("[data-track-visible]").forEach((button) => {
-          button.addEventListener("click", () => {
+            return;
+          }
+
+          if (button.dataset.trackVisible) {
             const target = button.dataset.trackVisible;
             if (target === "path") state.trackShowPath = !state.trackShowPath;
             else if (target === "waypoints") state.trackShowWaypoints = !state.trackShowWaypoints;
@@ -1758,53 +1766,63 @@
               state.trackShowWaypoints = showBoth;
             }
             renderAllCharts();
-          });
-        });
-        document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
-          button.addEventListener("click", () => {
+            return;
+          }
+
+          if (button.dataset.trackMarkerScope) {
             stopTrackPlayback();
             state.trackMarkerScope = button.dataset.trackMarkerScope;
             setTrackMarkerTime(trackMarkerTime());
-          });
-        });
-        document.querySelectorAll("[data-track-speed]").forEach((button) => {
-          button.addEventListener("click", () => {
+            return;
+          }
+
+          if (button.dataset.trackSpeed) {
             state.trackPlaybackSpeed = Number(button.dataset.trackSpeed) || 1;
             updateTrackControls();
-          });
-        });
-        document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
-          button.addEventListener("click", () => setTrack3dViewMode(button.dataset.track3dViewMode));
-        });
-        document.querySelectorAll("[data-track-3d-lock-toggle]").forEach((button) => {
-          button.addEventListener("click", () => {
+            return;
+          }
+
+          if (button.dataset.trackCameraMode) {
+            setTrack3dViewMode(button.dataset.trackCameraMode);
+            return;
+          }
+
+          if (button.hasAttribute("data-track-3d-lock-toggle")) {
             state.track3dOverheadLock = !state.track3dOverheadLock;
             for (const config of charts.values()) {
               if (config.type === "track3d" && config.view) {
                 config.view.pitch = constrainTrack3dPitch(config.view.pitch);
-                if (state.track3dOverheadLock) config.view.pitch = Math.min(config.view.pitch, -0.55);
+                if (state.track3dOverheadLock) config.view.pitch = snapLockedTrack3dPitch(config.view.pitch);
               }
             }
             state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
-            if (state.track3dOverheadLock) state.track3dView.pitch = Math.min(state.track3dView.pitch, -0.55);
+            if (state.track3dOverheadLock) state.track3dView.pitch = snapLockedTrack3dPitch(state.track3dView.pitch);
             renderAllCharts();
-          });
-        });
-        document.querySelector("#track-play-toggle")?.addEventListener("click", toggleTrackPlayback);
-        document.querySelector("#track-marker-time")?.addEventListener("input", (event) => {
-          stopTrackPlayback();
-          setTrackMarkerTime(event.target.value);
-        });
-        document.querySelector("#track-marker-path-end")?.addEventListener("click", () => {
-          stopTrackPlayback();
-          setTrackMarkerTime(trackMarkerBounds().end);
-        });
-        document.querySelector("#track-marker-inspect")?.addEventListener("click", () => {
-          if (finite(state.inspectorTime)) {
+            return;
+          }
+
+          if (button.id === "track-play-toggle") {
+            toggleTrackPlayback();
+            return;
+          }
+
+          if (button.id === "track-marker-path-end") {
+            stopTrackPlayback();
+            setTrackMarkerTime(trackMarkerBounds().end);
+            return;
+          }
+
+          if (button.id === "track-marker-inspect" && finite(state.inspectorTime)) {
             stopTrackPlayback();
             setTrackMarkerTime(state.inspectorTime);
           }
         });
+
+        controls.querySelector("#track-marker-time")?.addEventListener("input", (event) => {
+          stopTrackPlayback();
+          setTrackMarkerTime(event.target.value);
+        });
+
         updateTrackControls();
       }
 
@@ -2703,48 +2721,34 @@
         }
       }
 
+      const trackCamera = window.TrackCamera;
+
       function constrainTrack3dPitch(pitch) {
-        const value = finite(pitch) ? pitch : -0.55;
-        return state.track3dOverheadLock ? Math.min(value, -0.08) : value;
+        return trackCamera.constrainPitch(pitch, state.track3dOverheadLock);
+      }
+
+      function snapLockedTrack3dPitch(pitch) {
+        return trackCamera.snapLockedPitch(pitch);
+      }
+
+      function effectiveTrack3dView(view) {
+        return { ...(view || state.track3dView), pitch: constrainTrack3dPitch(view?.pitch) };
       }
 
       function normalizeAngle(angle) {
-        if (!finite(angle)) return 0;
-        let value = ((angle + Math.PI) % (Math.PI * 2)) - Math.PI;
-        if (value < -Math.PI) value += Math.PI * 2;
-        return value;
+        return trackCamera.normalizeAngle(angle);
       }
 
       function track3dViewModeLabel(mode) {
-        if (mode === "fixed-los") return "fixed LOS follow";
-        if (mode === "aircraft-relative") return "aircraft-relative follow";
-        if (mode === "track-vector") return "track-vector follow";
-        return "free view";
+        return trackCamera.viewModeLabel(mode);
       }
 
       function yawFromAttitude(row) {
-        const yaw = Number(row?.Yaw);
-        return finite(yaw) ? (yaw * Math.PI) / 180 : null;
+        return trackCamera.yawFromAttitude(row);
       }
 
       function trackCourseAt(points, markerTime) {
-        if (!Array.isArray(points) || points.length < 2 || !finite(markerTime)) return null;
-        let nearestIndex = 0;
-        let nearestDistance = Infinity;
-        points.forEach((point, index) => {
-          const distance = Math.abs(Number(point.time_s) - markerTime);
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestIndex = index;
-          }
-        });
-        const prev = points[Math.max(0, nearestIndex - 1)];
-        const next = points[Math.min(points.length - 1, nearestIndex + 1)];
-        if (!prev || !next || prev === next) return null;
-        const dx = next.x - prev.x;
-        const dy = next.y - prev.y;
-        if (Math.hypot(dx, dy) < 1e-6) return null;
-        return Math.atan2(dx, dy);
+        return trackCamera.trackCourseAt(points, markerTime);
       }
 
       function setTrack3dViewMode(mode) {
@@ -2753,7 +2757,7 @@
         const config = charts.get("track-3d-chart");
         if (config) {
           ensureTrack3dView(config, 1, 1);
-          const view = config.view || state.track3dView;
+          const view = effectiveTrack3dView(config.view || state.track3dView);
           const markerTime = trackMarkerTime();
           const points = projectTrack3d(config).filter((point) => point.kind === "pos");
           const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
@@ -2806,7 +2810,7 @@
 
       function track3dProject(point, config, plot) {
         const center = config.center3d || { cx: 0, cy: 0, cz: 0 };
-        const view = config.view || state.track3dView;
+        const view = effectiveTrack3dView(config.view || state.track3dView);
         const dx = point.x - center.cx;
         const dy = point.y - center.cy;
         const dz = point.z - center.cz;
