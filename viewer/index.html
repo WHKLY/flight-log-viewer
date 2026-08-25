@@ -870,6 +870,7 @@
         inspectorChainCollapsed: {},
         fontScale: "normal",
         track3dView: { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false },
+        track3dOverheadLock: true,
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -1601,6 +1602,9 @@
           <div class="chart-actions">
             ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
           </div>
+          <div class="chart-actions">
+            <button id="track-3d-overhead-lock" class="${state.track3dOverheadLock ? "active" : ""}">Overhead lock: ${state.track3dOverheadLock ? "on" : "off"}</button>
+          </div>
         </div>`;
       }
 
@@ -1636,6 +1640,11 @@
           playButton.textContent = state.trackPlaying ? "Pause" : "Play";
           playButton.classList.toggle("active", state.trackPlaying);
         }
+        const overheadLock = document.querySelector("#track-3d-overhead-lock");
+        if (overheadLock) {
+          overheadLock.textContent = `Overhead lock: ${state.track3dOverheadLock ? "on" : "off"}`;
+          overheadLock.classList.toggle("active", state.track3dOverheadLock);
+        }
       }
 
       function bindTrackControls() {
@@ -1666,6 +1675,14 @@
             state.trackPlaybackSpeed = Number(button.dataset.trackSpeed) || 1;
             updateTrackControls();
           });
+        });
+        document.querySelector("#track-3d-overhead-lock")?.addEventListener("click", () => {
+          state.track3dOverheadLock = !state.track3dOverheadLock;
+          for (const config of charts.values()) {
+            if (config.type === "track3d" && config.view) config.view.pitch = constrainTrack3dPitch(config.view.pitch);
+          }
+          state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
+          renderAllCharts();
         });
         document.querySelector("#track-play-toggle")?.addEventListener("click", toggleTrackPlayback);
         document.querySelector("#track-marker-time")?.addEventListener("input", (event) => {
@@ -2570,6 +2587,7 @@
         config.view.pitch ??= state.track3dView.pitch;
         config.view.panX ??= state.track3dView.panX || 0;
         config.view.panY ??= state.track3dView.panY || 0;
+        config.view.pitch = constrainTrack3dPitch(config.view.pitch);
         if (!config.view.userScaled && width > 20 && height > 20) {
           config.view.scale = Math.min(width, height) * 0.42 / fit.radius;
           state.track3dView.scale = config.view.scale;
@@ -2579,8 +2597,13 @@
         }
       }
 
+      function constrainTrack3dPitch(pitch) {
+        const value = finite(pitch) ? pitch : -0.55;
+        return state.track3dOverheadLock ? Math.min(value, 0) : value;
+      }
+
       function resetTrack3dView(config) {
-        config.view = { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false };
+        config.view = { yaw: -0.72, pitch: constrainTrack3dPitch(-0.55), scale: null, panX: 0, panY: 0, userScaled: false };
         state.track3dView = { ...config.view };
       }
 
@@ -2611,18 +2634,41 @@
         };
       }
 
-      function drawProjectedLine(ctx, points, config, plot, strokeStyle, lineWidth) {
+      function drawScreenArrow(ctx, from, to, color, size = 8) {
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        if (!finite(angle)) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - Math.cos(angle - 0.55) * size, to.y - Math.sin(angle - 0.55) * size);
+        ctx.lineTo(to.x - Math.cos(angle + 0.55) * size, to.y - Math.sin(angle + 0.55) * size);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawProjectedLine(ctx, points, config, plot, strokeStyle, lineWidth, showDirection = false) {
         const visible = downsample(points);
         if (!visible.length) return;
+        const screens = visible.map((point) => track3dProject(point, config, plot));
         ctx.strokeStyle = strokeStyle;
         ctx.lineWidth = lineWidth;
         ctx.beginPath();
-        visible.forEach((point, index) => {
-          const screen = track3dProject(point, config, plot);
+        screens.forEach((screen, index) => {
           if (index === 0) ctx.moveTo(screen.x, screen.y);
           else ctx.lineTo(screen.x, screen.y);
         });
         ctx.stroke();
+        if (showDirection && screens.length > 1) {
+          const step = Math.max(8, Math.floor(screens.length / 7));
+          for (let index = step; index < screens.length; index += step) {
+            drawScreenArrow(ctx, screens[index - 1], screens[index], strokeStyle, 7);
+          }
+          drawScreenArrow(ctx, screens[screens.length - 2], screens[screens.length - 1], strokeStyle, 7);
+        }
       }
 
       function drawTrack3dGroundDrops(ctx, points, groundZ, config, plot) {
@@ -2639,6 +2685,56 @@
           ctx.lineTo(bottom.x, bottom.y);
         });
         ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawTrack3dAxes(ctx, config, plot, center, gridSize, gridZ, zExtent) {
+        const axisLen = Math.max(25, gridSize * 0.16);
+        const base = { x: center.cx - gridSize * 0.86, y: center.cy - gridSize * 0.86, z: gridZ };
+        const axes = [
+          { end: { x: base.x + axisLen, y: base.y, z: base.z }, color: colors.red, label: "E" },
+          { end: { x: base.x, y: base.y + axisLen, z: base.z }, color: colors.green, label: "N" },
+          { end: { x: base.x, y: base.y, z: base.z + axisLen }, color: colors.blue, label: "U" },
+        ];
+        const origin = track3dProject(base, config, plot);
+        ctx.save();
+        ctx.font = canvasFont(11);
+        axes.forEach((axis) => {
+          const end = track3dProject(axis.end, config, plot);
+          ctx.strokeStyle = axis.color;
+          ctx.fillStyle = axis.color;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(origin.x, origin.y);
+          ctx.lineTo(end.x, end.y);
+          ctx.stroke();
+          drawScreenArrow(ctx, origin, end, axis.color, 6);
+          ctx.fillText(axis.label, end.x + 4, end.y - 4);
+        });
+
+        const zMin = gridZ;
+        const zMax = zExtent ? Math.max(zExtent.max, zMin + axisLen) : zMin + axisLen;
+        const zMid = (zMin + zMax) / 2;
+        const axisBase = { x: center.cx + gridSize * 0.84, y: center.cy - gridSize * 0.84, z: zMin };
+        const axisTop = { ...axisBase, z: zMax };
+        const baseScreen = track3dProject(axisBase, config, plot);
+        const topScreen = track3dProject(axisTop, config, plot);
+        ctx.strokeStyle = "rgba(77, 182, 255, 0.72)";
+        ctx.fillStyle = "#4db6ff";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(baseScreen.x, baseScreen.y);
+        ctx.lineTo(topScreen.x, topScreen.y);
+        ctx.stroke();
+        for (const z of [zMin, zMid, zMax]) {
+          const screen = track3dProject({ ...axisBase, z }, config, plot);
+          ctx.beginPath();
+          ctx.moveTo(screen.x - 4, screen.y);
+          ctx.lineTo(screen.x + 4, screen.y);
+          ctx.stroke();
+          ctx.fillText(`${fmt.format(z)}m`, screen.x + 7, screen.y + 4);
+        }
+        ctx.fillText("Alt", topScreen.x + 7, topScreen.y - 8);
         ctx.restore();
       }
 
@@ -2798,8 +2894,9 @@
         }
 
         drawTrack3dGroundDrops(ctx, flownPoints, gridZ, config, plot);
+        drawTrack3dAxes(ctx, config, plot, center, gridSize, gridZ, groundExtent);
         drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
-        drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4);
+        drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4, true);
 
         ctx.fillStyle = colors.gold;
         wpPoints.forEach((point) => {
@@ -2829,6 +2926,32 @@
         ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
         const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
         document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+      }
+
+      function drawTrack2dCompass(ctx, plot) {
+        const origin = { x: plot.left + plot.width - 52, y: plot.top + 52 };
+        const north = { x: origin.x, y: origin.y - 28 };
+        const east = { x: origin.x + 28, y: origin.y };
+        ctx.save();
+        ctx.font = canvasFont(11);
+        ctx.strokeStyle = colors.green;
+        ctx.fillStyle = colors.green;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(north.x, north.y);
+        ctx.stroke();
+        drawScreenArrow(ctx, origin, north, colors.green, 6);
+        ctx.fillText("N", north.x - 4, north.y - 6);
+        ctx.strokeStyle = colors.red;
+        ctx.fillStyle = colors.red;
+        ctx.beginPath();
+        ctx.moveTo(origin.x, origin.y);
+        ctx.lineTo(east.x, east.y);
+        ctx.stroke();
+        drawScreenArrow(ctx, origin, east, colors.red, 6);
+        ctx.fillText("E", east.x + 5, east.y + 4);
+        ctx.restore();
       }
 
       function drawTrackChart(config) {
@@ -2873,12 +2996,17 @@
           ctx.lineTo(sx(x), plot.top + plot.height);
           ctx.stroke();
         }
+        ctx.fillStyle = "#607068";
+        ctx.font = canvasFont(10);
         for (let y = Math.floor(bottomWorld / gridStep) * gridStep; y <= topWorld; y += gridStep) {
+          const labelY = sy(y);
           ctx.beginPath();
-          ctx.moveTo(plot.left, sy(y));
-          ctx.lineTo(plot.left + plot.width, sy(y));
+          ctx.moveTo(plot.left, labelY);
+          ctx.lineTo(plot.left + plot.width, labelY);
           ctx.stroke();
+          if (labelY > plot.top + 12 && labelY < plot.top + plot.height - 4) ctx.fillText(`N ${fmt.format(y)}m`, plot.left + 4, labelY - 3);
         }
+        drawTrack2dCompass(ctx, plot);
 
         ctx.save();
         ctx.beginPath();
@@ -2893,14 +3021,22 @@
         });
         ctx.stroke();
 
+        const posLinePoints = downsample(posPoints);
         ctx.strokeStyle = colors.green;
         ctx.lineWidth = 2.3;
         ctx.beginPath();
-        downsample(posPoints).forEach((point, index) => {
+        posLinePoints.forEach((point, index) => {
           if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
           else ctx.lineTo(sx(point.x), sy(point.y));
         });
         ctx.stroke();
+        if (posLinePoints.length > 1) {
+          const step = Math.max(8, Math.floor(posLinePoints.length / 7));
+          for (let index = step; index < posLinePoints.length; index += step) {
+            drawScreenArrow(ctx, { x: sx(posLinePoints[index - 1].x), y: sy(posLinePoints[index - 1].y) }, { x: sx(posLinePoints[index].x), y: sy(posLinePoints[index].y) }, colors.green, 7);
+          }
+          drawScreenArrow(ctx, { x: sx(posLinePoints[posLinePoints.length - 2].x), y: sy(posLinePoints[posLinePoints.length - 2].y) }, { x: sx(posLinePoints[posLinePoints.length - 1].x), y: sy(posLinePoints[posLinePoints.length - 1].y) }, colors.green, 7);
+        }
 
         ctx.fillStyle = colors.gold;
         wpPoints.forEach((point) => {
@@ -3221,7 +3357,7 @@
             state.dragging.moved ||= Math.abs(dx) + Math.abs(dy) > 4;
             ensureTrack3dView(config, rect.width, rect.height);
             config.view.yaw = state.dragging.yaw + dx * 0.008;
-            config.view.pitch = state.dragging.pitch + dy * 0.006;
+            config.view.pitch = constrainTrack3dPitch(state.dragging.pitch + dy * 0.006);
             drawTrack3dChart(config);
             return;
           }
@@ -3505,7 +3641,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Overhead lock 打开时禁止转到仰视侧；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },

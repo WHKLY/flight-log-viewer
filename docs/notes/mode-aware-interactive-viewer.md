@@ -49,6 +49,7 @@ Date: 2026-08-23
 - Track 3D view now draws semi-transparent blue drop lines from the flown path up to the current Plane time down to the ground plane, and 3D pitch drag no longer clamps the viewing angle.
 - Release documentation pass: README is now the main Termux operation guide, `docs/project-architecture.md` documents source/generated/viewer boundaries, release/tag/push workflow is documented, and the project was regenerated from a clean generated-data state.
 - Large log viewer fix: browser-side range, stats, 2D track bounds, 3D bounds, and 3D ground-plane calculations no longer use spread-argument `Math.min/Math.max` on log-sized arrays, preventing `Maximum call stack size exceeded` on large files.
+- Track reference overlay update: keep the previously correct 3D aircraft roll/view convention, while adding 2D/3D path time-direction arrows, 2D N/E and north-meter labels, 3D E/N/U plus altitude axes, and Overhead lock to prevent rotating into underside view.
 
 ## Current sample
 
@@ -302,6 +303,19 @@ Changes for this pass:
 - Replace `Math.min(...largeArray)` and `Math.max(...largeArray)` patterns with iterative extent helpers.
 - Apply this to full time range, stats summaries, 2D track bounds/default view, 3D bounds, and 3D ground plane height.
 - Keep generated data format unchanged so existing scripts and release workflow continue to work.
+
+## Track 2D/3D direction and overhead-lock v15 plan
+
+Goal: remove ambiguity in Track orientation while preserving the existing correct 3D attitude/view convention.
+
+Changes for this pass:
+
+- Preserve the existing 3D aircraft roll display convention after visual re-check; do not change the 3D roll sign.
+- Add time-direction arrowheads to the 2D and 3D flown path lines.
+- Add 2D map orientation and vertical/north coordinate labels.
+- Add 3D E/N/U orientation axes and a vertical altitude axis in the 3D scene.
+- Add an `Overhead lock` control: when enabled, 3D pitch is clamped to the overhead side so the view cannot rotate into underside/up-looking perspective.
+- Keep 3D Reset on the previous default oblique view; direction labels and arrows carry the orientation context.
 
 ## Next direction
 
