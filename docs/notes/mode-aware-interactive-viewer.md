@@ -330,6 +330,20 @@ Changes for this pass:
 - Remove ellipsis behavior from value fields that already have scrollable overflow; long values should remain readable through horizontal scrolling.
 - Preserve the previously correct 3D roll/view convention.
 
+## Track overlay visibility and aircraft camera v17 plan
+
+Goal: make Track review faster when the path/waypoints clutter the scene and add aircraft-centered 3D camera modes.
+
+Changes for this pass:
+
+- Add one-click path/waypoint visibility controls: path, waypoints, and hide/show both.
+- Apply visibility consistently to 2D and 3D path/waypoint drawing while keeping the aircraft marker visible.
+- Add 3D camera modes: free view, fixed line-of-sight follow, aircraft-relative follow, and track-vector follow.
+- In follow modes, center the 3D scene on the current Plane marker; manual 3D drag returns to free view.
+- Keep Overhead lock active across camera modes by constraining camera pitch through the same clamp function.
+
+- Track overlay visibility and 3D camera modes: path/waypoint display can be toggled individually or together; 3D camera can switch between free, fixed line-of-sight follow, aircraft-relative follow, and track-vector follow while keeping Overhead lock constraints.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

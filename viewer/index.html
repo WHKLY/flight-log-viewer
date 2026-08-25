@@ -895,6 +895,8 @@
         highlightedWaypointIndex: null,
         trackPathMode: "window",
         trackModeFilter: "all",
+        trackShowPath: true,
+        trackShowWaypoints: true,
         trackMarkerScope: "window",
         trackMarkerTime: null,
         trackPlaying: false,
@@ -908,6 +910,10 @@
         fontScale: "normal",
         track3dView: { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false },
         track3dOverheadLock: true,
+        track3dViewMode: "free",
+        track3dFixedView: { yaw: -0.72, pitch: -0.55 },
+        track3dAircraftViewOffset: { yaw: 0, pitch: -0.55 },
+        track3dTrackViewOffset: { yaw: 0, pitch: -0.55 },
         dragging: null,
         pinch: null,
         skipClick: null,
@@ -1619,12 +1625,22 @@
         const span = Math.max(bounds.end - bounds.start, 1);
         const step = Math.max(span / 1200, 0.02);
         const modeButtons = trackModeNames().map((name) => `<button class="${state.trackModeFilter === name ? "active" : ""}" data-track-mode-filter="${escapeHtml(name)}">${name === "all" ? "All modes" : escapeHtml(name)}</button>`).join("");
+        const bothVisible = state.trackShowPath && state.trackShowWaypoints;
+        const cameraModes = [
+          ["free", "Free view"],
+          ["fixed-los", "Fixed LOS follow"],
+          ["aircraft-relative", "Aircraft-relative follow"],
+          ["track-vector", "Track-vector follow"],
+        ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-3d-view-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
           <section class="track-section">
             <div class="track-section-title"><strong>Path display</strong><span class="range-text" id="track-path-text"></span></div>
             <div class="track-button-row">
               <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">Show window path</button>
               <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">Show full path</button>
+              <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">Path ${state.trackShowPath ? "on" : "off"}</button>
+              <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoints ${state.trackShowWaypoints ? "on" : "off"}</button>
+              <button data-track-visible="both">${bothVisible ? "Hide path + waypoints" : "Show path + waypoints"}</button>
             </div>
             <div class="track-button-row">${modeButtons}</div>
           </section>
@@ -1646,10 +1662,11 @@
             </div>
           </section>
           <section class="track-section">
-            <div class="track-section-title"><strong>3D view</strong><span class="range-text" id="track-3d-view-text"></span></div>
+            <div class="track-section-title"><strong>3D camera</strong><span class="range-text" id="track-3d-view-text"></span></div>
+            <div class="track-button-row">${cameraModes}</div>
             <div class="track-button-row">
               <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock="on">Lock overhead</button>
-              <button class="${state.track3dOverheadLock ? "" : "active"}" data-track-3d-lock="off">Free view</button>
+              <button class="${state.track3dOverheadLock ? "" : "active"}" data-track-3d-lock="off">Free view pitch</button>
             </div>
           </section>
         </div>`;
@@ -1676,6 +1693,18 @@
         document.querySelectorAll("[data-track-mode-filter]").forEach((button) => {
           button.classList.toggle("active", button.dataset.trackModeFilter === state.trackModeFilter);
         });
+        document.querySelectorAll("[data-track-visible]").forEach((button) => {
+          if (button.dataset.trackVisible === "path") {
+            button.classList.toggle("active", state.trackShowPath);
+            button.textContent = `Path ${state.trackShowPath ? "on" : "off"}`;
+          } else if (button.dataset.trackVisible === "waypoints") {
+            button.classList.toggle("active", state.trackShowWaypoints);
+            button.textContent = `Waypoints ${state.trackShowWaypoints ? "on" : "off"}`;
+          } else if (button.dataset.trackVisible === "both") {
+            button.classList.toggle("active", state.trackShowPath && state.trackShowWaypoints);
+            button.textContent = state.trackShowPath && state.trackShowWaypoints ? "Hide path + waypoints" : "Show path + waypoints";
+          }
+        });
         document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
           button.classList.toggle("active", button.dataset.trackMarkerScope === state.trackMarkerScope);
         });
@@ -1688,7 +1717,10 @@
           playButton.classList.toggle("active", state.trackPlaying);
         }
         const viewText = document.querySelector("#track-3d-view-text");
-        if (viewText) viewText.textContent = state.track3dOverheadLock ? "locked overhead" : "free rotation";
+        if (viewText) viewText.textContent = `${track3dViewModeLabel(state.track3dViewMode)} | ${state.track3dOverheadLock ? "locked overhead" : "free pitch"}`;
+        document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.track3dViewMode === state.track3dViewMode);
+        });
         document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
           button.classList.toggle("active", (button.dataset.track3dLock === "on") === state.track3dOverheadLock);
         });
@@ -1710,6 +1742,19 @@
             setTrackMarkerTime(trackMarkerTime());
           });
         });
+        document.querySelectorAll("[data-track-visible]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const target = button.dataset.trackVisible;
+            if (target === "path") state.trackShowPath = !state.trackShowPath;
+            else if (target === "waypoints") state.trackShowWaypoints = !state.trackShowWaypoints;
+            else if (target === "both") {
+              const showBoth = !(state.trackShowPath && state.trackShowWaypoints);
+              state.trackShowPath = showBoth;
+              state.trackShowWaypoints = showBoth;
+            }
+            renderAllCharts();
+          });
+        });
         document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
           button.addEventListener("click", () => {
             stopTrackPlayback();
@@ -1722,6 +1767,9 @@
             state.trackPlaybackSpeed = Number(button.dataset.trackSpeed) || 1;
             updateTrackControls();
           });
+        });
+        document.querySelectorAll("[data-track-3d-view-mode]").forEach((button) => {
+          button.addEventListener("click", () => setTrack3dViewMode(button.dataset.track3dViewMode));
         });
         document.querySelectorAll("[data-track-3d-lock]").forEach((button) => {
           button.addEventListener("click", () => {
@@ -2651,7 +2699,93 @@
         return state.track3dOverheadLock ? Math.min(value, -0.08) : value;
       }
 
+      function normalizeAngle(angle) {
+        if (!finite(angle)) return 0;
+        let value = ((angle + Math.PI) % (Math.PI * 2)) - Math.PI;
+        if (value < -Math.PI) value += Math.PI * 2;
+        return value;
+      }
+
+      function track3dViewModeLabel(mode) {
+        if (mode === "fixed-los") return "fixed LOS follow";
+        if (mode === "aircraft-relative") return "aircraft-relative follow";
+        if (mode === "track-vector") return "track-vector follow";
+        return "free view";
+      }
+
+      function yawFromAttitude(row) {
+        const yaw = Number(row?.Yaw);
+        return finite(yaw) ? (yaw * Math.PI) / 180 : null;
+      }
+
+      function trackCourseAt(points, markerTime) {
+        if (!Array.isArray(points) || points.length < 2 || !finite(markerTime)) return null;
+        let nearestIndex = 0;
+        let nearestDistance = Infinity;
+        points.forEach((point, index) => {
+          const distance = Math.abs(Number(point.time_s) - markerTime);
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestIndex = index;
+          }
+        });
+        const prev = points[Math.max(0, nearestIndex - 1)];
+        const next = points[Math.min(points.length - 1, nearestIndex + 1)];
+        if (!prev || !next || prev === next) return null;
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        if (Math.hypot(dx, dy) < 1e-6) return null;
+        return Math.atan2(dx, dy);
+      }
+
+      function setTrack3dViewMode(mode) {
+        const allowed = new Set(["free", "fixed-los", "aircraft-relative", "track-vector"]);
+        const nextMode = allowed.has(mode) ? mode : "free";
+        const config = charts.get("track-3d-chart");
+        if (config) {
+          ensureTrack3dView(config, 1, 1);
+          const view = config.view || state.track3dView;
+          const markerTime = trackMarkerTime();
+          const points = projectTrack3d(config).filter((point) => point.kind === "pos");
+          const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
+          if (nextMode === "fixed-los") {
+            state.track3dFixedView = { yaw: view.yaw, pitch: constrainTrack3dPitch(view.pitch) };
+          } else if (nextMode === "aircraft-relative") {
+            const yaw = yawFromAttitude(attitude);
+            state.track3dAircraftViewOffset = { yaw: yaw === null ? 0 : normalizeAngle(view.yaw - yaw), pitch: constrainTrack3dPitch(view.pitch) };
+          } else if (nextMode === "track-vector") {
+            const course = trackCourseAt(points, markerTime);
+            state.track3dTrackViewOffset = { yaw: course === null ? 0 : normalizeAngle(view.yaw - course), pitch: constrainTrack3dPitch(view.pitch) };
+          }
+        }
+        state.track3dViewMode = nextMode;
+        renderAllCharts();
+      }
+
+      function applyTrack3dCameraMode(config, current, attitude, posPoints, markerTime) {
+        if (state.track3dViewMode === "free" || !current) return;
+        config.view ||= { ...state.track3dView };
+        const fit = config.center3d || { cx: 0, cy: 0, cz: 0, radius: 80 };
+        config.center3d = { ...fit, cx: current.x, cy: current.y, cz: current.z };
+        config.view.panX = 0;
+        config.view.panY = 0;
+        if (state.track3dViewMode === "fixed-los") {
+          config.view.yaw = state.track3dFixedView.yaw;
+          config.view.pitch = constrainTrack3dPitch(state.track3dFixedView.pitch);
+        } else if (state.track3dViewMode === "aircraft-relative") {
+          const yaw = yawFromAttitude(attitude);
+          if (yaw !== null) config.view.yaw = normalizeAngle(yaw + state.track3dAircraftViewOffset.yaw);
+          config.view.pitch = constrainTrack3dPitch(state.track3dAircraftViewOffset.pitch);
+        } else if (state.track3dViewMode === "track-vector") {
+          const course = trackCourseAt(posPoints, markerTime);
+          if (course !== null) config.view.yaw = normalizeAngle(course + state.track3dTrackViewOffset.yaw);
+          config.view.pitch = constrainTrack3dPitch(state.track3dTrackViewOffset.pitch);
+        }
+        state.track3dView = { ...config.view };
+      }
+
       function resetTrack3dView(config) {
+        state.track3dViewMode = "free";
         config.view = { yaw: -0.72, pitch: constrainTrack3dPitch(-0.55), scale: null, panX: 0, panY: 0, userScaled: false };
         state.track3dView = { ...config.view };
       }
@@ -2899,7 +3033,6 @@
         const pad = { left: 20, right: 16, top: 20, bottom: 28 };
         const plot = { left: pad.left, top: pad.top, width: width - pad.left - pad.right, height: height - pad.top - pad.bottom };
         ensureTrack3dView(config, plot.width, plot.height);
-        state.track3dView = { ...config.view };
 
         const projected = projectTrack3d(config);
         const pathRange = trackPathRange();
@@ -2910,6 +3043,8 @@
         const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
         const current = (nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
         const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
+        applyTrack3dCameraMode(config, current, attitude, allPos, markerTime);
+        state.track3dView = { ...config.view };
         const size = Math.max(6, (config.center3d?.radius || 80) * 0.0425);
 
         ctx.clearRect(0, 0, width, height);
@@ -2942,29 +3077,31 @@
           ctx.stroke();
         }
 
-        drawTrack3dGroundDrops(ctx, flownPoints, gridZ, config, plot);
+        if (state.trackShowPath) drawTrack3dGroundDrops(ctx, flownPoints, gridZ, config, plot);
         drawTrack3dAxes(ctx, config, plot, center, gridSize, gridZ, groundExtent);
-        drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
-        drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4, true);
+        if (state.trackShowWaypoints) drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
+        if (state.trackShowPath) drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4, true);
 
-        ctx.fillStyle = colors.gold;
-        wpPoints.forEach((point) => {
-          const screen = track3dProject(point, config, plot);
-          ctx.beginPath();
-          ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        });
+        if (state.trackShowWaypoints) {
+          ctx.fillStyle = colors.gold;
+          wpPoints.forEach((point) => {
+            const screen = track3dProject(point, config, plot);
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
 
-        const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
-        if (highlighted) {
-          const screen = track3dProject(highlighted, config, plot);
-          ctx.strokeStyle = colors.red;
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          ctx.arc(screen.x, screen.y, 10, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.fillStyle = colors.red;
-          ctx.fillText(`#${highlighted.row.index}`, screen.x + 12, screen.y - 8);
+          const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+          if (highlighted) {
+            const screen = track3dProject(highlighted, config, plot);
+            ctx.strokeStyle = colors.red;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = colors.red;
+            ctx.fillText(`#${highlighted.row.index}`, screen.x + 12, screen.y - 8);
+          }
         }
 
         if (current && attitude) drawAircraftModel(ctx, current, attitude, config, plot, size);
@@ -2974,7 +3111,7 @@
         ctx.font = canvasFont(12);
         ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
         const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | Camera ${track3dViewModeLabel(state.track3dViewMode)} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
       }
 
       function drawTrack2dCompass(ctx, plot) {
@@ -3061,39 +3198,45 @@
         ctx.beginPath();
         ctx.rect(plot.left, plot.top, plot.width, plot.height);
         ctx.clip();
-        ctx.strokeStyle = colors.gold;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        wpPoints.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
-          else ctx.lineTo(sx(point.x), sy(point.y));
-        });
-        ctx.stroke();
-
-        const posLinePoints = downsample(posPoints);
-        ctx.strokeStyle = colors.green;
-        ctx.lineWidth = 2.3;
-        ctx.beginPath();
-        posLinePoints.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
-          else ctx.lineTo(sx(point.x), sy(point.y));
-        });
-        ctx.stroke();
-        if (posLinePoints.length > 1) {
-          const step = Math.max(8, Math.floor(posLinePoints.length / 7));
-          for (let index = step; index < posLinePoints.length; index += step) {
-            drawScreenArrow(ctx, { x: sx(posLinePoints[index - 1].x), y: sy(posLinePoints[index - 1].y) }, { x: sx(posLinePoints[index].x), y: sy(posLinePoints[index].y) }, colors.green, 7);
-          }
-          drawScreenArrow(ctx, { x: sx(posLinePoints[posLinePoints.length - 2].x), y: sy(posLinePoints[posLinePoints.length - 2].y) }, { x: sx(posLinePoints[posLinePoints.length - 1].x), y: sy(posLinePoints[posLinePoints.length - 1].y) }, colors.green, 7);
+        if (state.trackShowWaypoints) {
+          ctx.strokeStyle = colors.gold;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          wpPoints.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+            else ctx.lineTo(sx(point.x), sy(point.y));
+          });
+          ctx.stroke();
         }
 
-        ctx.fillStyle = colors.gold;
-        wpPoints.forEach((point) => {
+        const posLinePoints = downsample(posPoints);
+        if (state.trackShowPath) {
+          ctx.strokeStyle = colors.green;
+          ctx.lineWidth = 2.3;
           ctx.beginPath();
-          ctx.arc(sx(point.x), sy(point.y), 3, 0, Math.PI * 2);
-          ctx.fill();
-        });
-        const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+          posLinePoints.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+            else ctx.lineTo(sx(point.x), sy(point.y));
+          });
+          ctx.stroke();
+          if (posLinePoints.length > 1) {
+            const step = Math.max(8, Math.floor(posLinePoints.length / 7));
+            for (let index = step; index < posLinePoints.length; index += step) {
+              drawScreenArrow(ctx, { x: sx(posLinePoints[index - 1].x), y: sy(posLinePoints[index - 1].y) }, { x: sx(posLinePoints[index].x), y: sy(posLinePoints[index].y) }, colors.green, 7);
+            }
+            drawScreenArrow(ctx, { x: sx(posLinePoints[posLinePoints.length - 2].x), y: sy(posLinePoints[posLinePoints.length - 2].y) }, { x: sx(posLinePoints[posLinePoints.length - 1].x), y: sy(posLinePoints[posLinePoints.length - 1].y) }, colors.green, 7);
+          }
+        }
+
+        if (state.trackShowWaypoints) {
+          ctx.fillStyle = colors.gold;
+          wpPoints.forEach((point) => {
+            ctx.beginPath();
+            ctx.arc(sx(point.x), sy(point.y), 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        }
+        const highlighted = state.trackShowWaypoints ? wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex) : null;
         if (markerPoint) {
           const mx = sx(markerPoint.x);
           const my = sy(markerPoint.y);
@@ -3123,7 +3266,7 @@
         ctx.fillStyle = "#607068";
         ctx.font = canvasFont(12);
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -3276,6 +3419,10 @@
                 mapView: { ...config.mapView },
               };
             } else if (config.type === "track3d") {
+              if (state.track3dViewMode !== "free") {
+                state.track3dViewMode = "free";
+                updateTrackControls();
+              }
               ensureTrack3dView(config, rect.width, rect.height);
               state.pinch = {
                 chartId: config.id,
@@ -3313,6 +3460,10 @@
           if (config.type === "track") {
             state.dragging = { chartId: config.id, type: "map", x: event.clientX, y: event.clientY, cx: config.mapView.cx, cy: config.mapView.cy };
           } else if (config.type === "track3d") {
+            if (state.track3dViewMode !== "free") {
+              state.track3dViewMode = "free";
+              updateTrackControls();
+            }
             ensureTrack3dView(config, canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height);
             const panGesture = event.shiftKey || event.button === 1 || event.button === 2;
             state.dragging = panGesture
