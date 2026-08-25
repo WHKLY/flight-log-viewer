@@ -39,6 +39,7 @@ Date: 2026-08-23
 - Track playback controls now advance the independent Plane time marker with selectable speed. The 3D aircraft model is smaller and uses line-only wings/body without the translucent green surface fill.
 - Track playback polish: the Track control panel now uses theme-aware background color, and Plane time drag/playback updates the global Inspector time so status cards follow the selected aircraft marker time.
 - Track HUD: the right-side Track panel now shows marker-time attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, GPS status, and sample ages. The 3D aircraft model is reduced by another 50 percent.
+- Track HUD now has a hide/show toggle and renders a graphical attitude indicator with sky/ground horizon, pitch ladder, roll pointer, heading cue, and missing-attitude state. Numeric speed/altitude/mode readouts remain below the graphical HUD.
 
 ## Current sample
 
@@ -204,6 +205,17 @@ Changes for this pass:
 - Add a Track-side HUD panel that follows Plane time and shows attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, and current marker time.
 - Source HUD values from nearest logged `ATT`, `POS`, and `GPS` records; show missing values explicitly instead of estimating unavailable fields.
 - Keep HUD on the Track right-side information panel so it does not compete with the 2D/3D canvases.
+
+## Graphical Track HUD v7 plan
+
+Goal: make the Track HUD look like a flight attitude indicator instead of only numeric cards.
+
+Changes for this pass:
+
+- Add a show/hide toggle for the Track HUD in the right-side Track panel.
+- Render a small canvas attitude indicator with sky/ground, horizon line, pitch ladder, roll pointer, and heading cue based on nearest `ATT` sample at Plane time.
+- Keep compact numeric readouts beside/below the graphical HUD for altitude, GPS ground speed, ARSP airspeed, heading, mode, and sample ages.
+- If attitude is missing, show a clear missing-state canvas rather than drawing a misleading horizon.
 
 ## Next direction
 

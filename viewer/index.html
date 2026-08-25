@@ -541,6 +541,19 @@
         scrollbar-width: thin;
       }
 
+      .track-hud.hidden {
+        display: none;
+      }
+
+      .hud-canvas {
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        height: 180px;
+        margin-bottom: 8px;
+        width: 100%;
+      }
+
       .track-hud .kv-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         margin-top: 0;
@@ -851,6 +864,7 @@
         trackPlaybackSpeed: 1,
         trackPlaybackLastMs: null,
         trackPlaybackFrame: null,
+        trackHudVisible: true,
         inspectorTime: null,
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
@@ -1672,11 +1686,115 @@
         return finite(sampleTime) && finite(time) ? Math.abs(time - sampleTime) : null;
       }
 
+      function drawAttitudeHud(canvas, values) {
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, rect.width || 240);
+        const height = Math.max(1, rect.height || 180);
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, width, height);
+        const cx = width / 2;
+        const cy = height / 2;
+        const radius = Math.min(width, height) * 0.44;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.clip();
+        if (!finite(values.roll) || !finite(values.pitch)) {
+          ctx.fillStyle = "#1d2a24";
+          ctx.fillRect(0, 0, width, height);
+          ctx.fillStyle = "#b7c6bd";
+          ctx.font = canvasFont(13);
+          ctx.textAlign = "center";
+          ctx.fillText("ATT missing", cx, cy);
+          ctx.restore();
+          return;
+        }
+        const roll = (values.roll * Math.PI) / 180;
+        const pitchOffset = clamp(values.pitch, -45, 45) * (radius / 28);
+        ctx.translate(cx, cy);
+        ctx.rotate(-roll);
+        ctx.translate(0, pitchOffset);
+        ctx.fillStyle = "#4f9fd8";
+        ctx.fillRect(-width, -height * 2, width * 2, height * 2);
+        ctx.fillStyle = "#8a5a2b";
+        ctx.fillRect(-width, 0, width * 2, height * 2);
+        ctx.strokeStyle = "#f7fff9";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-width, 0);
+        ctx.lineTo(width, 0);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(247, 255, 249, 0.82)";
+        ctx.lineWidth = 1;
+        ctx.font = canvasFont(10);
+        ctx.textAlign = "center";
+        for (let pitch = -30; pitch <= 30; pitch += 10) {
+          if (pitch === 0) continue;
+          const y = -pitch * (radius / 28);
+          const half = pitch % 20 === 0 ? radius * 0.34 : radius * 0.22;
+          ctx.beginPath();
+          ctx.moveTo(-half, y);
+          ctx.lineTo(half, y);
+          ctx.stroke();
+          ctx.fillStyle = "rgba(247, 255, 249, 0.9)";
+          ctx.fillText(String(Math.abs(pitch)), -half - 12, y + 3);
+          ctx.fillText(String(Math.abs(pitch)), half + 12, y + 3);
+        }
+        ctx.restore();
+
+        const style = getComputedStyle(document.documentElement);
+        ctx.strokeStyle = style.getPropertyValue("--line").trim() || "#d7ded6";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = "#f2c36b";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.45, cy);
+        ctx.lineTo(cx - radius * 0.12, cy);
+        ctx.moveTo(cx + radius * 0.12, cy);
+        ctx.lineTo(cx + radius * 0.45, cy);
+        ctx.moveTo(cx, cy - 7);
+        ctx.lineTo(cx, cy + 7);
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(roll);
+        ctx.fillStyle = "#ff9387";
+        ctx.beginPath();
+        ctx.moveTo(0, -radius - 7);
+        ctx.lineTo(-6, -radius + 7);
+        ctx.lineTo(6, -radius + 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = "#edf4ef";
+        ctx.font = canvasFont(12);
+        ctx.textAlign = "center";
+        ctx.fillText(`HDG ${hudValue(values.heading, " deg")}`, cx, 18);
+        ctx.fillText(`R ${hudValue(values.roll, " deg")}  P ${hudValue(values.pitch, " deg")}`, cx, height - 10);
+      }
+
       function updateTrackHud() {
         const node = document.querySelector("#track-hud");
         if (!node) return;
         const trackConfig = charts.get("track-chart");
         const track3dConfig = charts.get("track-3d-chart");
+        node.classList.toggle("hidden", !state.trackHudVisible);
+        const toggle = document.querySelector("#track-hud-toggle");
+        if (toggle) {
+          toggle.textContent = state.trackHudVisible ? "Hide HUD" : "Show HUD";
+          toggle.classList.toggle("active", state.trackHudVisible);
+        }
+        if (!state.trackHudVisible) return;
         if (!trackConfig && !track3dConfig) {
           node.innerHTML = `<p>No track data.</p>`;
           return;
@@ -1691,6 +1809,8 @@
         const air = airSample?.row || {};
         const att = attSample?.row || {};
         const mode = findModeAt(time);
+        const roll = numericFrom(att, ["Roll"]);
+        const pitch = numericFrom(att, ["Pitch"]);
         const heading = numericFrom(att, ["Yaw"]) ?? numericFrom(gps, ["GCrs", "Yaw"]);
         const altitude = numericFrom(pos, ["RelHomeAlt", "Alt", "RelOriginAlt"]);
         const groundSpeed = numericFrom(gps, ["Spd"]);
@@ -1702,16 +1822,17 @@
           ["GPS", sampleAge(gpsSample, time)],
           ["ARSP", sampleAge(airSample, time)],
         ].map(([name, age]) => `${name} ${finite(age) ? fmt.format(age) + "s" : "missing"}`).join(" | ");
-        node.innerHTML = `<div class="kv-grid">
+        node.innerHTML = `<canvas class="hud-canvas" id="track-hud-canvas"></canvas><div class="kv-grid">
           ${hudKv("time", `${fmt.format(time)}s`)}
           ${hudKv("mode", mode?.name || "unknown")}
-          ${hudKv("roll / pitch", `${hudValue(numericFrom(att, ["Roll"]), " deg")} / ${hudValue(numericFrom(att, ["Pitch"]), " deg")}`)}
+          ${hudKv("roll / pitch", `${hudValue(roll, " deg")} / ${hudValue(pitch, " deg")}`)}
           ${hudKv("heading", hudValue(heading, " deg"))}
           ${hudKv("altitude", hudValue(altitude, " m"))}
           ${hudKv("GPS speed", hudValue(groundSpeed, " m/s"))}
           ${hudKv("airspeed", hudValue(airSpeed, " m/s"))}
           ${hudKv("GPS info", gpsInfo)}
         </div><div class="hud-note" title="${escapeHtml(ages)}">sample age: ${escapeHtml(ages)}</div>`;
+        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading });
       }
 
       function renderToolbar() {
@@ -3145,7 +3266,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<h3>HUD</h3><div id="track-hud" class="track-hud"></div><h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `<div class="toolbar-row"><h3>HUD</h3><button id="track-hud-toggle">Hide HUD</button></div><div id="track-hud" class="track-hud"></div><h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
@@ -3207,6 +3328,10 @@
         });
         bindWaypointButtons();
         bindTrackControls();
+        document.querySelector("#track-hud-toggle")?.addEventListener("click", () => {
+          state.trackHudVisible = !state.trackHudVisible;
+          updateTrackHud();
+        });
 
         registerCharts([
           {
