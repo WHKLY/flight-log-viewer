@@ -38,6 +38,7 @@ Date: 2026-08-23
 - Track time controls now sit between the 2D and 3D track canvases, include a Track-specific flight-mode filter, allow the aircraft marker slider to use either the current window or full flight, and the 3D marker is drawn as a simple aircraft model instead of only a triad.
 - Track playback controls now advance the independent Plane time marker with selectable speed. The 3D aircraft model is smaller and uses line-only wings/body without the translucent green surface fill.
 - Track playback polish: the Track control panel now uses theme-aware background color, and Plane time drag/playback updates the global Inspector time so status cards follow the selected aircraft marker time.
+- Track HUD: the right-side Track panel now shows marker-time attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, GPS status, and sample ages. The 3D aircraft model is reduced by another 50 percent.
 
 ## Current sample
 
@@ -192,6 +193,17 @@ Changes for this pass:
 - Use theme-aware panel colors for Track controls so dark mode does not show a white control block.
 - Keep Plane time useful for inspection: dragging the marker slider and playback both update the global inspector time so status cards follow the aircraft marker.
 - Avoid changing the global shared chart time range while doing this; only the inspect marker and Track aircraft marker move.
+
+## Track HUD v6 plan
+
+Goal: make the selected aircraft marker time readable as flight instruments beside the Track view.
+
+Changes for this pass:
+
+- Reduce the 3D aircraft model size by another 50 percent.
+- Add a Track-side HUD panel that follows Plane time and shows attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, and current marker time.
+- Source HUD values from nearest logged `ATT`, `POS`, and `GPS` records; show missing values explicitly instead of estimating unavailable fields.
+- Keep HUD on the Track right-side information panel so it does not compete with the 2D/3D canvases.
 
 ## Next direction
 

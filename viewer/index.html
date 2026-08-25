@@ -530,6 +530,29 @@
         white-space: nowrap;
       }
 
+      .track-hud {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        max-height: 280px;
+        overflow: auto;
+        padding: 10px;
+        scrollbar-width: thin;
+      }
+
+      .track-hud .kv-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 0;
+      }
+
+      .track-hud .hud-note {
+        color: var(--muted);
+        font-size: calc(11px * var(--font-scale));
+        margin-top: 8px;
+        white-space: nowrap;
+      }
+
       .inspector-row {
         align-items: start;
         border-top: 1px solid var(--line);
@@ -1628,6 +1651,69 @@
         updateTrackControls();
       }
 
+      function numericFrom(row, keys) {
+        for (const key of keys) {
+          const value = Number(row?.[key]);
+          if (finite(value)) return value;
+        }
+        return null;
+      }
+
+      function hudValue(value, unit = "") {
+        return finite(value) ? `${fmt.format(value)}${unit}` : "missing";
+      }
+
+      function hudKv(label, value, title = value) {
+        return `<div class="kv"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(title)}">${escapeHtml(value)}</strong></div>`;
+      }
+
+      function sampleAge(sample, time) {
+        const sampleTime = Number(sample?.row?.time_s);
+        return finite(sampleTime) && finite(time) ? Math.abs(time - sampleTime) : null;
+      }
+
+      function updateTrackHud() {
+        const node = document.querySelector("#track-hud");
+        if (!node) return;
+        const trackConfig = charts.get("track-chart");
+        const track3dConfig = charts.get("track-3d-chart");
+        if (!trackConfig && !track3dConfig) {
+          node.innerHTML = `<p>No track data.</p>`;
+          return;
+        }
+        const time = trackMarkerTime();
+        const posSample = nearestRow(trackConfig?.posRows || track3dConfig?.posRows || [], time);
+        const gpsSample = nearestRow(trackConfig?.gpsRows || track3dConfig?.gpsRows || [], time);
+        const airSample = nearestRow(trackConfig?.arspRows || track3dConfig?.arspRows || [], time);
+        const attSample = nearestRow(track3dConfig?.attitudeRows || trackConfig?.attitudeRows || [], time);
+        const pos = posSample?.row || {};
+        const gps = gpsSample?.row || {};
+        const air = airSample?.row || {};
+        const att = attSample?.row || {};
+        const mode = findModeAt(time);
+        const heading = numericFrom(att, ["Yaw"]) ?? numericFrom(gps, ["GCrs", "Yaw"]);
+        const altitude = numericFrom(pos, ["RelHomeAlt", "Alt", "RelOriginAlt"]);
+        const groundSpeed = numericFrom(gps, ["Spd"]);
+        const airSpeed = numericFrom(air, ["Airspeed"]);
+        const gpsInfo = gpsSample ? `GPS ${gps.Status ?? "?"} | sats ${gps.NSats ?? "?"}` : "GPS missing";
+        const ages = [
+          ["ATT", sampleAge(attSample, time)],
+          ["POS", sampleAge(posSample, time)],
+          ["GPS", sampleAge(gpsSample, time)],
+          ["ARSP", sampleAge(airSample, time)],
+        ].map(([name, age]) => `${name} ${finite(age) ? fmt.format(age) + "s" : "missing"}`).join(" | ");
+        node.innerHTML = `<div class="kv-grid">
+          ${hudKv("time", `${fmt.format(time)}s`)}
+          ${hudKv("mode", mode?.name || "unknown")}
+          ${hudKv("roll / pitch", `${hudValue(numericFrom(att, ["Roll"]), " deg")} / ${hudValue(numericFrom(att, ["Pitch"]), " deg")}`)}
+          ${hudKv("heading", hudValue(heading, " deg"))}
+          ${hudKv("altitude", hudValue(altitude, " m"))}
+          ${hudKv("GPS speed", hudValue(groundSpeed, " m/s"))}
+          ${hudKv("airspeed", hudValue(airSpeed, " m/s"))}
+          ${hudKv("GPS info", gpsInfo)}
+        </div><div class="hud-note" title="${escapeHtml(ages)}">sample age: ${escapeHtml(ages)}</div>`;
+      }
+
       function renderToolbar() {
         document.querySelector("#timeline-toolbar").innerHTML = `<div class="toolbar">
           <div class="toolbar-row"><strong>Time / Flight Mode 横轴</strong><span class="range-text" id="range-text"></span></div>
@@ -2322,7 +2408,7 @@
         const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
         const current = (nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
         const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
-        const size = Math.max(12, (config.center3d?.radius || 80) * 0.085);
+        const size = Math.max(6, (config.center3d?.radius || 80) * 0.0425);
 
         ctx.clearRect(0, 0, width, height);
         ctx.strokeStyle = "#d7ded6";
@@ -2576,6 +2662,7 @@
           else if (config.type === "track3d") drawTrack3dChart(config);
           else drawLineChart(config);
         }
+        updateTrackHud();
       }
 
       function bindChartEvents(config) {
@@ -3058,7 +3145,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `<h3>HUD</h3><div id="track-hud" class="track-hud"></div><h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
@@ -3131,8 +3218,8 @@
               { label: "Waypoint Alt", color: colors.gold, points: summary.waypoints.filter((w) => w.alt).map((w, i) => ({ x: state.fullRange.start + i * 8, y: Number(w.alt), row: w })) },
             ],
           },
-          { id: "track-chart", type: "track", posRows: track.messages.POS, waypointRows: summary.waypoints },
-          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
+          { id: "track-chart", type: "track", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, waypointRows: summary.waypoints },
+          { id: "track-3d-chart", type: "track3d", posRows: track.messages.POS, gpsRows: track.messages.GPS, arspRows: tecs.messages.ARSP, waypointRows: summary.waypoints, attitudeRows: attitude.messages.ATT },
           {
             id: "l1-chart",
             type: "line",
