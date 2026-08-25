@@ -3266,7 +3266,7 @@
             "Track / Geometry",
             "当前时间窗口航迹、航点和 3D 姿态复现。",
             `${chartPanel("track-chart")}${trackControlsHtml()}${chartPanel("track-3d-chart")}`,
-            `<div class="toolbar-row"><h3>HUD</h3><button id="track-hud-toggle">Hide HUD</button></div><div id="track-hud" class="track-hud"></div><h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；Reset 3D 恢复视角。小模型保留 nose/right/up 颜色提示。</div><div class="toolbar-row"><h3>HUD</h3><button id="track-hud-toggle">Hide HUD</button></div><div id="track-hud" class="track-hud"></div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },

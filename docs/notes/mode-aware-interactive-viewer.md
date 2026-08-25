@@ -40,6 +40,7 @@ Date: 2026-08-23
 - Track playback polish: the Track control panel now uses theme-aware background color, and Plane time drag/playback updates the global Inspector time so status cards follow the selected aircraft marker time.
 - Track HUD: the right-side Track panel now shows marker-time attitude, altitude, GPS ground speed, ARSP airspeed, heading, flight mode, GPS status, and sample ages. The 3D aircraft model is reduced by another 50 percent.
 - Track HUD now has a hide/show toggle and renders a graphical attitude indicator with sky/ground horizon, pitch ladder, roll pointer, heading cue, and missing-attitude state. Numeric speed/altitude/mode readouts remain below the graphical HUD.
+- Track HUD placement now follows the 3D view note and appears before the waypoint table, so it is visually aligned with the 3D track area rather than the top of the right-side panel.
 
 ## Current sample
 
@@ -216,6 +217,15 @@ Changes for this pass:
 - Render a small canvas attitude indicator with sky/ground, horizon line, pitch ladder, roll pointer, and heading cue based on nearest `ATT` sample at Plane time.
 - Keep compact numeric readouts beside/below the graphical HUD for altitude, GPS ground speed, ARSP airspeed, heading, mode, and sample ages.
 - If attitude is missing, show a clear missing-state canvas rather than drawing a misleading horizon.
+
+## Track HUD placement v8 plan
+
+Goal: align the Track HUD visually with the 3D track area instead of the top of the right-side Track panel.
+
+Changes for this pass:
+
+- Move the HUD block below Track bounds and the 3D view note, before the waypoint table.
+- Keep the existing show/hide behavior and HUD data refresh unchanged.
 
 ## Next direction
 
