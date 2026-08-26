@@ -419,6 +419,35 @@ Implementation for this pass:
 
 - Mission task UI and override workflow: viewer now loads mission source candidates and optional file overrides, shows Current Mission Task in Track controls and Inspector, supports global source selection, explicit Start/End/Seq local overrides, and uses selected mission source rows for 2D/3D waypoint display.
 
+## Track Geometry main-view refactor v23 plan
+
+Goal: make Track / Geometry prioritize flight state, current mission task, and spatial replay instead of presenting a long control stack. HUD should become a hideable overlay fused into the 3D scene.
+
+Design rules:
+
+- Treat Current Mission Task and HUD as first-priority flight-state information, not secondary side-panel notes.
+- Keep the main Track view compact: mission status strip, 2D track, time marker controls, and 3D scene with HUD overlay.
+- Move low-frequency controls into collapsible advanced groups: mission override editing, display filters, playback details, 3D camera, and metadata/help.
+- Replace the table-like HUD with a cockpit-style canvas overlay: attitude horizon center, GPS/air speed tape left, altitude tape right, heading scale bottom, and mission/source status top.
+- Continue bounded refactoring: extract HUD drawing to `viewer/js/track-hud.js` first; leave large chart renderers in `index.html` until this UI layer is stable.
+
+Implementation for this pass:
+
+- Add `viewer/js/track-hud.js` with a `TrackHud.draw(...)` API.
+- Render HUD as an overlay canvas inside the 3D chart shell with show/hide control.
+- Add a compact mission status strip above Track charts.
+- Rebuild Track controls into compact toolbar plus `<details>` advanced groups.
+- Keep existing mission source override behavior and 3D camera controls available, but no longer let them dominate the panel height.
+
+
+Result for this pass:
+
+- Implemented `viewer/js/track-hud.js` as the first extracted Track UI module; `index.html` now samples HUD values and delegates drawing to `TrackHud.draw(...)`.
+- Moved HUD from the right-side Track panel into the 3D chart shell as a transparent, hideable canvas overlay.
+- Added a compact mission status strip above Track charts for mode, current mission task, source, and override state.
+- Rebuilt Track controls as a quick action bar plus collapsible groups for marker/playback, path filters, mission source overrides, and 3D camera.
+- Removed the old table-style HUD DOM card and old inline HUD drawing helpers from `index.html`.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

@@ -464,17 +464,59 @@
         border: 1px solid var(--line);
         border-radius: 10px;
         box-shadow: var(--shadow);
-        margin: 12px 0;
-        padding: 10px;
+        margin: 8px 0 12px;
+        padding: 8px;
       }
 
-      .track-section {
+      .track-quickbar {
+        align-items: center;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        overflow: auto;
+        scrollbar-width: thin;
+      }
+
+      .track-quickbar button,
+      .track-quickbar select {
+        flex: 0 0 auto;
+      }
+
+      .track-section,
+      .track-details {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 9px;
+        min-width: 0;
+      }
+
+      .track-section {
         display: grid;
         gap: 7px;
-        min-width: 0;
+        padding: 8px;
+      }
+
+      .track-details {
+        overflow: hidden;
+      }
+
+      .track-details summary {
+        cursor: pointer;
+        font-weight: 700;
+        list-style-position: inside;
+        overflow: auto;
+        padding: 8px;
+        scrollbar-width: thin;
+        white-space: nowrap;
+      }
+
+      .track-details[open] summary {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .track-details-body {
+        display: grid;
+        gap: 7px;
         padding: 8px;
       }
 
@@ -492,7 +534,7 @@
 
       .track-button-row {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 6px;
         max-height: 86px;
         overflow: auto;
@@ -581,40 +623,57 @@
         white-space: nowrap;
       }
 
-      .track-hud {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        box-shadow: var(--shadow);
-        max-height: 280px;
-        overflow: auto;
-        padding: 10px;
-        scrollbar-width: thin;
+      .track-3d-stage {
+        position: relative;
       }
 
-      .track-hud.hidden {
+      .track-hud-overlay {
+        background: transparent;
+        border: 0;
+        border-radius: 16px;
+        height: calc(100% - 24px);
+        max-width: 380px;
+        min-height: 320px;
+        pointer-events: none;
+        position: absolute;
+        right: 12px;
+        top: 12px;
+        width: min(38%, 380px);
+        z-index: 3;
+      }
+
+      .track-hud-overlay.hidden {
         display: none;
       }
 
-      .hud-canvas {
-        background: var(--canvas);
+      .mission-status-strip {
+        align-items: center;
+        background: linear-gradient(135deg, rgba(15, 106, 85, 0.14), rgba(36, 107, 147, 0.11));
         border: 1px solid var(--line);
-        border-radius: 8px;
-        height: 180px;
-        margin-bottom: 8px;
-        width: 100%;
+        border-radius: 10px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(86px, auto) minmax(0, 1fr) minmax(120px, auto);
+        margin: 12px 0 8px;
+        overflow: auto;
+        padding: 8px 10px;
+        scrollbar-width: thin;
       }
 
-      .track-hud .kv-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        margin-top: 0;
-      }
-
-      .track-hud .hud-note {
-        color: var(--muted);
-        font-size: calc(11px * var(--font-scale));
-        margin-top: 8px;
+      .mission-status-strip strong,
+      .mission-status-strip span {
+        overflow: auto;
+        scrollbar-width: thin;
         white-space: nowrap;
+      }
+
+      .mission-status-strip .source {
+        color: var(--muted);
+        text-align: right;
+      }
+
+      .mission-status-strip.override {
+        border-color: rgba(255, 77, 255, 0.55);
       }
 
       .inspector-row {
@@ -862,6 +921,7 @@
     </main>
 
     <script src="js/track-camera.js"></script>
+    <script src="js/track-hud.js"></script>
     <script>
       const colors = {
         green: "#0f6a55",
@@ -1627,6 +1687,22 @@
         <div class="legend" id="${id}-legend"></div>`;
       }
 
+      function track3dPanel() {
+        const id = "track-3d-chart";
+        return `<div class="chart-shell track-3d-stage">
+          <canvas id="${id}" data-chart="${id}"></canvas>
+          <canvas id="track-hud-overlay" class="track-hud-overlay ${state.trackHudVisible ? "" : "hidden"}"></canvas>
+          <div class="readout" id="${id}-readout"></div>
+        </div>
+        <div class="chart-control-bar">
+          <button data-scale-reset="${id}">Reset 3D</button>
+          <button data-scale-in="${id}">Scale +</button>
+          <button data-scale-out="${id}">Scale -</button>
+          <button data-href-clear="${id}">Clear Y refs</button>
+        </div>
+        <div class="legend" id="${id}-legend"></div>`;
+      }
+
       function finite(value) {
         return Number.isFinite(value);
       }
@@ -1811,6 +1887,20 @@
         else startTrackPlayback();
       }
 
+      function missionStatusStripHtml() {
+        const time = currentMissionDisplayTime();
+        const mode = findModeAt(time);
+        const mission = missionInfoAt(time);
+        const modeText = mode ? `${mode.name} ${fmt.format(mode.start_s)}..${fmt.format(mode.end_s)}s` : "mode missing";
+        const taskText = `${mission.label || "mission missing"}${mission.detail ? " | " + mission.detail : ""}`;
+        const sourceText = `${mission.source || "source missing"}${mission.override ? " | override" : ""}`;
+        return `<div class="mission-status-strip ${mission.override ? "override" : ""}">
+          <strong title="${escapeHtml(modeText)}">${escapeHtml(mode?.name || "MODE ?")}</strong>
+          <span title="${escapeHtml(taskText)}">${escapeHtml(taskText)} ${statusPill(mission.status)}</span>
+          <span class="source" title="${escapeHtml(sourceText)}">${escapeHtml(sourceText)}</span>
+        </div>`;
+      }
+
       function trackControlsHtml() {
         const bounds = trackMarkerBounds();
         const span = Math.max(bounds.end - bounds.start, 1);
@@ -1824,50 +1914,52 @@
           ["track-vector", "航迹方向跟随"],
         ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-camera-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
-          <section class="track-section">
-            <div class="track-section-title"><strong>Current Mission Task</strong><span class="range-text">manual source override capable</span></div>
-            ${renderMissionTaskCard()}
-          </section>
-          <section class="track-section">
-            <div class="track-section-title"><strong>Track overlays</strong><span class="range-text">一键显示/隐藏</span></div>
-            <div class="track-button-row">
-              <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">航迹 ${state.trackShowPath ? "显示" : "隐藏"}</button>
-              <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoint ${state.trackShowWaypoints ? "显示" : "隐藏"}</button>
-              <button class="${bothVisible ? "active" : ""}" data-track-visible="both">${bothVisible ? "一键隐藏航迹+Waypoint" : "一键显示航迹+Waypoint"}</button>
+          <div class="track-quickbar">
+            <button id="track-hud-toggle" class="${state.trackHudVisible ? "active" : ""}">${state.trackHudVisible ? "隐藏 HUD" : "显示 HUD"}</button>
+            <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">航迹 ${state.trackShowPath ? "显示" : "隐藏"}</button>
+            <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoint ${state.trackShowWaypoints ? "显示" : "隐藏"}</button>
+            <button class="${bothVisible ? "active" : ""}" data-track-visible="both">${bothVisible ? "隐藏航迹+Waypoint" : "显示航迹+Waypoint"}</button>
+            <button id="track-play-toggle">${state.trackPlaying ? "Pause" : "Play"}</button>
+            <button id="track-marker-inspect">Marker=Inspect</button>
+            <button id="track-marker-path-end">Marker=Path end</button>
+          </div>
+          <details class="track-details" open>
+            <summary>Plane marker / playback</summary>
+            <div class="track-details-body">
+              <div class="track-section-title"><strong>Plane marker</strong><span class="range-text" id="track-marker-text"></span></div>
+              <div class="track-button-row">
+                <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Marker range: window</button>
+                <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Marker range: full</button>
+                ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
+              </div>
+              <label class="track-slider-row">Plane time<input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
             </div>
-          </section>
-          <section class="track-section">
-            <div class="track-section-title"><strong>Path display</strong><span class="range-text" id="track-path-text"></span></div>
-            <div class="track-button-row">
-              <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">显示当前窗口航迹</button>
-              <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">显示全程航迹</button>
+          </details>
+          <details class="track-details">
+            <summary>Path / flight mode filters</summary>
+            <div class="track-details-body">
+              <div class="track-section-title"><strong>Path display</strong><span class="range-text" id="track-path-text"></span></div>
+              <div class="track-button-row">
+                <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">显示当前窗口航迹</button>
+                <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">显示全程航迹</button>
+              </div>
+              <div class="track-button-row">${modeButtons}</div>
             </div>
-            <div class="track-button-row">${modeButtons}</div>
-          </section>
-          <section class="track-section">
-            <div class="track-section-title"><strong>Plane marker</strong><span class="range-text" id="track-marker-text"></span></div>
-            <div class="track-button-row">
-              <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Marker range: window</button>
-              <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Marker range: full</button>
-              <button id="track-marker-path-end">Move to path end</button>
-              <button id="track-marker-inspect">Move to inspect</button>
+          </details>
+          <details class="track-details">
+            <summary>Mission source / override</summary>
+            <div class="track-details-body">${renderMissionTaskCard()}</div>
+          </details>
+          <details class="track-details">
+            <summary>3D camera</summary>
+            <div class="track-details-body">
+              <div class="track-section-title"><strong>3D camera</strong><span class="range-text" id="track-3d-view-text"></span></div>
+              <div class="track-button-row">${cameraModes}</div>
+              <div class="track-button-row">
+                <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock-toggle>俯瞰限制 ${state.track3dOverheadLock ? "开" : "关"}</button>
+              </div>
             </div>
-            <label class="track-slider-row">Plane time<input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
-          </section>
-          <section class="track-section">
-            <div class="track-section-title"><strong>Playback</strong><span class="range-text">Plane marker only</span></div>
-            <div class="track-button-row">
-              <button id="track-play-toggle">${state.trackPlaying ? "Pause" : "Play"}</button>
-              ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
-            </div>
-          </section>
-          <section class="track-section">
-            <div class="track-section-title"><strong>3D camera</strong><span class="range-text" id="track-3d-view-text"></span></div>
-            <div class="track-button-row">${cameraModes}</div>
-            <div class="track-button-row">
-              <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock-toggle>俯瞰限制 ${state.track3dOverheadLock ? "开" : "关"}</button>
-            </div>
-          </section>
+          </details>
         </div>`;
       }
 
@@ -1915,6 +2007,13 @@
           playButton.textContent = state.trackPlaying ? "Pause" : "Play";
           playButton.classList.toggle("active", state.trackPlaying);
         }
+        const hudButton = document.querySelector("#track-hud-toggle");
+        if (hudButton) {
+          hudButton.textContent = state.trackHudVisible ? "隐藏 HUD" : "显示 HUD";
+          hudButton.classList.toggle("active", state.trackHudVisible);
+        }
+        const missionStrip = document.querySelector(".mission-status-strip");
+        if (missionStrip) missionStrip.outerHTML = missionStatusStripHtml();
         const missionTask = document.querySelector(".mission-task-card");
         if (missionTask) missionTask.outerHTML = renderMissionTaskCard();
         const sourceSelect = document.querySelector("#mission-source-mode");
@@ -1944,6 +2043,13 @@
         controls.addEventListener("click", (event) => {
           const button = event.target.closest("button");
           if (!button || !controls.contains(button)) return;
+
+          if (button.id === "track-hud-toggle") {
+            state.trackHudVisible = !state.trackHudVisible;
+            updateTrackControls();
+            updateTrackHud();
+            return;
+          }
 
           if (button.dataset.trackPathMode) {
             stopTrackPlayback();
@@ -2096,310 +2202,19 @@
         return null;
       }
 
-      function hudValue(value, unit = "") {
-        return finite(value) ? `${fmt.format(value)}${unit}` : "missing";
-      }
-
-      function hudKv(label, value, title = value) {
-        return `<div class="kv"><span>${escapeHtml(label)}</span><strong title="${escapeHtml(title)}">${escapeHtml(value)}</strong></div>`;
-      }
-
-      function sampleAge(sample, time) {
-        const sampleTime = Number(sample?.row?.time_s);
-        return finite(sampleTime) && finite(time) ? Math.abs(time - sampleTime) : null;
-      }
-
-      function hudNumber(value, digits = 0) {
-        return finite(value) ? value.toFixed(digits) : "---";
-      }
-
-      function drawHudTape(ctx, x, y, width, height, value, label, unit, align = "left", targetValue = null) {
-        ctx.save();
-        ctx.fillStyle = "rgba(16, 25, 20, 0.78)";
-        ctx.strokeStyle = "rgba(247, 255, 249, 0.74)";
-        ctx.lineWidth = 1;
-        ctx.fillRect(x, y, width, height);
-        ctx.strokeRect(x, y, width, height);
-        ctx.fillStyle = "#edf4ef";
-        ctx.font = canvasFont(10);
-        ctx.textAlign = "center";
-        ctx.fillText(label, x + width / 2, y + 13);
-        ctx.font = canvasFont(16);
-        ctx.fillText(hudNumber(value, 1), x + width / 2, y + height / 2 + 6);
-        ctx.font = canvasFont(9);
-        ctx.fillText(unit, x + width / 2, y + height - 8);
-        if (finite(value)) {
-          ctx.strokeStyle = "rgba(237, 244, 239, 0.55)";
-          ctx.font = canvasFont(9);
-          for (let offset = -2; offset <= 2; offset++) {
-            if (!offset) continue;
-            const tickY = y + height / 2 - offset * 19;
-            if (tickY < y + 18 || tickY > y + height - 18) continue;
-            const tickValue = value + offset * (unit === "m" ? 10 : 2);
-            ctx.beginPath();
-            if (align === "left") {
-              ctx.moveTo(x + width - 12, tickY);
-              ctx.lineTo(x + width - 4, tickY);
-              ctx.textAlign = "right";
-              ctx.fillText(hudNumber(tickValue, 0), x + width - 15, tickY + 3);
-            } else {
-              ctx.moveTo(x + 4, tickY);
-              ctx.lineTo(x + 12, tickY);
-              ctx.textAlign = "left";
-              ctx.fillText(hudNumber(tickValue, 0), x + 15, tickY + 3);
-            }
-            ctx.stroke();
-          }
-          if (finite(targetValue)) {
-            const step = unit === "m" ? 10 : 2;
-            const targetY = clamp(y + height / 2 - ((targetValue - value) / step) * 19, y + 18, y + height - 18);
-            ctx.fillStyle = "#ff4dff";
-            ctx.strokeStyle = "#ff4dff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            if (align === "left") {
-              ctx.moveTo(x + width - 4, targetY);
-              ctx.lineTo(x + width - 16, targetY - 6);
-              ctx.lineTo(x + width - 16, targetY + 6);
-            } else {
-              ctx.moveTo(x + 4, targetY);
-              ctx.lineTo(x + 16, targetY - 6);
-              ctx.lineTo(x + 16, targetY + 6);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.font = canvasFont(9);
-            ctx.textAlign = align === "left" ? "right" : "left";
-            ctx.fillText(`T ${hudNumber(targetValue, 0)}`, align === "left" ? x + width - 18 : x + 18, targetY - 8);
-          }
-        }
-        ctx.restore();
-      }
-
-      function drawHeadingTape(ctx, x, y, width, height, heading, targetHeading = null, navHeading = null) {
-        ctx.save();
-        ctx.fillStyle = "rgba(16, 25, 20, 0.78)";
-        ctx.strokeStyle = "rgba(247, 255, 249, 0.74)";
-        ctx.lineWidth = 1;
-        ctx.fillRect(x, y, width, height);
-        ctx.strokeRect(x, y, width, height);
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#edf4ef";
-        ctx.font = canvasFont(10);
-        ctx.fillText("HDG", x + width / 2, y + 12);
-        ctx.font = canvasFont(16);
-        ctx.fillText(finite(heading) ? String(Math.round((heading + 360) % 360)).padStart(3, "0") : "---", x + width / 2, y + height - 10);
-        if (finite(heading)) {
-          const center = x + width / 2;
-          ctx.strokeStyle = "rgba(237, 244, 239, 0.55)";
-          ctx.font = canvasFont(9);
-          for (let offset = -30; offset <= 30; offset += 10) {
-            const tx = center + offset * (width / 80);
-            const h = (Math.round(heading / 10) * 10 + offset + 360) % 360;
-            ctx.beginPath();
-            ctx.moveTo(tx, y + 16);
-            ctx.lineTo(tx, y + (offset % 30 === 0 ? 29 : 24));
-            ctx.stroke();
-            if (offset % 30 === 0) ctx.fillText(String(h).padStart(3, "0"), tx, y + 39);
-          }
-          const headingBugX = (target) => {
-            let delta = ((target - heading + 540) % 360) - 180;
-            delta = clamp(delta, -40, 40);
-            return center + delta * (width / 80);
-          };
-          if (finite(navHeading)) {
-            const tx = headingBugX(navHeading);
-            ctx.strokeStyle = "#4db6ff";
-            ctx.fillStyle = "#4db6ff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(tx, y + 17);
-            ctx.lineTo(tx - 6, y + 29);
-            ctx.lineTo(tx + 6, y + 29);
-            ctx.closePath();
-            ctx.fill();
-          }
-          if (finite(targetHeading)) {
-            const tx = headingBugX(targetHeading);
-            ctx.strokeStyle = "#ff4dff";
-            ctx.fillStyle = "#ff4dff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(tx, y + height - 7);
-            ctx.lineTo(tx - 6, y + height - 19);
-            ctx.lineTo(tx + 6, y + height - 19);
-            ctx.closePath();
-            ctx.fill();
-          }
-          ctx.fillStyle = "#f2c36b";
-          ctx.beginPath();
-          ctx.moveTo(center, y + 15);
-          ctx.lineTo(center - 6, y + 27);
-          ctx.lineTo(center + 6, y + 27);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.restore();
-      }
-
-      function drawAttitudeHud(canvas, values) {
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        const dpr = window.devicePixelRatio || 1;
-        const rect = canvas.getBoundingClientRect();
-        const width = Math.max(1, rect.width || 260);
-        const height = Math.max(1, rect.height || 210);
-        canvas.width = Math.floor(width * dpr);
-        canvas.height = Math.floor(height * dpr);
-        ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, width, height);
-        const tapeW = Math.max(48, Math.min(62, width * 0.22));
-        const headingH = 50;
-        const centerLeft = tapeW + 8;
-        const centerRight = width - tapeW - 8;
-        const cx = width / 2;
-        const cy = (height - headingH) / 2 + 6;
-        const radius = Math.min(centerRight - centerLeft, height - headingH - 12) * 0.47;
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.clip();
-        if (!finite(values.roll) || !finite(values.pitch)) {
-          ctx.fillStyle = "#1d2a24";
-          ctx.fillRect(centerLeft, 0, centerRight - centerLeft, height - headingH);
-          ctx.fillStyle = "#b7c6bd";
-          ctx.font = canvasFont(13);
-          ctx.textAlign = "center";
-          ctx.fillText("ATT missing", cx, cy);
-          ctx.restore();
-        } else {
-          const roll = (values.roll * Math.PI) / 180;
-          const pitchOffset = clamp(values.pitch, -45, 45) * (radius / 28);
-          ctx.translate(cx, cy);
-          ctx.rotate(-roll);
-          ctx.translate(0, pitchOffset);
-          ctx.fillStyle = "#4f9fd8";
-          ctx.fillRect(-width, -height * 2, width * 2, height * 2);
-          ctx.fillStyle = "#8a5a2b";
-          ctx.fillRect(-width, 0, width * 2, height * 2);
-          ctx.strokeStyle = "#f7fff9";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(-width, 0);
-          ctx.lineTo(width, 0);
-          ctx.stroke();
-          ctx.strokeStyle = "rgba(247, 255, 249, 0.82)";
-          ctx.lineWidth = 1;
-          ctx.font = canvasFont(10);
-          ctx.textAlign = "center";
-          for (let pitch = -30; pitch <= 30; pitch += 10) {
-            if (pitch === 0) continue;
-            const y = -pitch * (radius / 28);
-            const half = pitch % 20 === 0 ? radius * 0.34 : radius * 0.22;
-            ctx.beginPath();
-            ctx.moveTo(-half, y);
-            ctx.lineTo(half, y);
-            ctx.stroke();
-          }
-          ctx.restore();
-          const style = getComputedStyle(document.documentElement);
-          ctx.strokeStyle = style.getPropertyValue("--line").trim() || "#d7ded6";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-          ctx.stroke();
-          if (finite(values.navRoll) || finite(values.navPitch)) {
-            const navRoll = ((finite(values.navRoll) ? values.navRoll : values.roll) * Math.PI) / 180;
-            const navPitchOffset = -clamp(finite(values.navPitch) ? values.navPitch : values.pitch, -45, 45) * (radius / 28);
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(navRoll);
-            ctx.translate(0, navPitchOffset);
-            ctx.strokeStyle = "#4db6ff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-radius * 0.24, 0);
-            ctx.lineTo(radius * 0.24, 0);
-            ctx.moveTo(0, -radius * 0.11);
-            ctx.lineTo(0, radius * 0.11);
-            ctx.stroke();
-            ctx.restore();
-          }
-          if (finite(values.desRoll) || finite(values.desPitch)) {
-            const targetRoll = ((finite(values.desRoll) ? values.desRoll : values.roll) * Math.PI) / 180;
-            const targetPitchOffset = -clamp(finite(values.desPitch) ? values.desPitch : values.pitch, -45, 45) * (radius / 28);
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(targetRoll);
-            ctx.translate(0, targetPitchOffset);
-            ctx.strokeStyle = "#ff4dff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(-radius * 0.28, 0);
-            ctx.lineTo(-radius * 0.08, 0);
-            ctx.moveTo(radius * 0.08, 0);
-            ctx.lineTo(radius * 0.28, 0);
-            ctx.moveTo(0, -radius * 0.12);
-            ctx.lineTo(0, radius * 0.12);
-            ctx.stroke();
-            ctx.restore();
-          }
-          ctx.strokeStyle = "#f2c36b";
-          ctx.fillStyle = "#f2c36b";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(cx - radius * 0.47, cy);
-          ctx.lineTo(cx - radius * 0.16, cy);
-          ctx.moveTo(cx + radius * 0.16, cy);
-          ctx.lineTo(cx + radius * 0.47, cy);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(cx - 9, cy + 16);
-          ctx.lineTo(cx + 9, cy + 16);
-          ctx.closePath();
-          ctx.fill();
-          ctx.save();
-          ctx.translate(cx, cy);
-          ctx.rotate(roll);
-          ctx.fillStyle = "#ff9387";
-          ctx.beginPath();
-          ctx.moveTo(0, -radius - 7);
-          ctx.lineTo(-6, -radius + 7);
-          ctx.lineTo(6, -radius + 7);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
-        const displaySpeed = finite(values.airSpeed) ? values.airSpeed : values.groundSpeed;
-        const displayTargetSpeed = finite(values.targetSpeed) ? values.targetSpeed : null;
-        drawHudTape(ctx, 4, 10, tapeW, height - headingH - 18, displaySpeed, finite(values.airSpeed) ? "IAS" : "GS", "m/s", "left", displayTargetSpeed);
-        if (finite(values.airSpeed) && finite(values.groundSpeed)) {
-          ctx.fillStyle = "#b7c6bd";
-          ctx.font = canvasFont(9);
-          ctx.textAlign = "center";
-          ctx.fillText(`GS ${hudNumber(values.groundSpeed, 1)}`, 4 + tapeW / 2, height - headingH - 12);
-        }
-        drawHudTape(ctx, width - tapeW - 4, 10, tapeW, height - headingH - 18, values.altitude, "ALT", "m", "right", values.targetAltitude);
-        drawHeadingTape(ctx, centerLeft, height - headingH + 4, centerRight - centerLeft, headingH - 8, values.heading, values.targetHeading, values.navHeading);
-      }
-
       function updateTrackHud() {
-        const node = document.querySelector("#track-hud");
-        if (!node) return;
-        const trackConfig = charts.get("track-chart");
-        const track3dConfig = charts.get("track-3d-chart");
-        node.classList.toggle("hidden", !state.trackHudVisible);
+        const canvas = document.querySelector("#track-hud-overlay");
+        if (!canvas) return;
+        canvas.classList.toggle("hidden", !state.trackHudVisible);
         const toggle = document.querySelector("#track-hud-toggle");
         if (toggle) {
-          toggle.textContent = state.trackHudVisible ? "Hide HUD" : "Show HUD";
+          toggle.textContent = state.trackHudVisible ? "隐藏 HUD" : "显示 HUD";
           toggle.classList.toggle("active", state.trackHudVisible);
         }
         if (!state.trackHudVisible) return;
-        if (!trackConfig && !track3dConfig) {
-          node.innerHTML = `<p>No track data.</p>`;
-          return;
-        }
+        const trackConfig = charts.get("track-chart");
+        const track3dConfig = charts.get("track-3d-chart");
+        if (!trackConfig && !track3dConfig) return;
         const time = trackMarkerTime();
         const posSample = nearestRow(trackConfig?.posRows || track3dConfig?.posRows || [], time);
         const gpsSample = nearestRow(trackConfig?.gpsRows || track3dConfig?.gpsRows || [], time);
@@ -2416,40 +2231,25 @@
         const ntun = ntunSample?.row || {};
         const att = attSample?.row || {};
         const mode = findModeAt(time);
-        const roll = numericFrom(att, ["Roll"]);
-        const pitch = numericFrom(att, ["Pitch"]);
-        const heading = numericFrom(att, ["Yaw"]) ?? numericFrom(gps, ["GCrs", "Yaw"]);
-        const targetHeading = numericFrom(att, ["DesYaw"]);
-        const altitude = numericFrom(pos, ["RelHomeAlt", "Alt", "RelOriginAlt"]);
-        const targetAltitude = numericFrom(tecs, ["hdem"]);
-        const groundSpeed = numericFrom(gps, ["Spd"]);
-        const airSpeed = numericFrom(air, ["Airspeed"]);
-        const targetSpeed = numericFrom(tecs, ["spdem"]);
-        const desRoll = numericFrom(att, ["DesRoll"]);
-        const desPitch = numericFrom(att, ["DesPitch"]);
-        const navRoll = numericFrom(nav, ["NavRoll"]);
-        const navPitch = numericFrom(nav, ["NavPitch"]);
-        const navHeading = numericFrom(ntun, ["NavBrg", "TBrg"]);
-        const gpsInfo = gpsSample ? `GPS ${gps.Status ?? "?"} | sats ${gps.NSats ?? "?"}` : "GPS missing";
-        const ages = [
-          ["ATT", sampleAge(attSample, time)],
-          ["POS", sampleAge(posSample, time)],
-          ["GPS", sampleAge(gpsSample, time)],
-          ["ARSP", sampleAge(airSample, time)],
-          ["TECS", sampleAge(tecsSample, time)],
-          ["CTUN", sampleAge(navSample, time)],
-          ["NTUN", sampleAge(ntunSample, time)],
-        ].map(([name, age]) => `${name} ${finite(age) ? fmt.format(age) + "s" : "missing"}`).join(" | ");
-        node.innerHTML = `<canvas class="hud-canvas" id="track-hud-canvas"></canvas><div class="kv-grid">
-          ${hudKv("time", `${fmt.format(time)}s`)}
-          ${hudKv("mode", mode?.name || "unknown")}
-          ${hudKv("GPS speed", hudValue(groundSpeed, " m/s"))}
-          ${hudKv("airspeed", hudValue(airSpeed, " m/s"))}
-          ${hudKv("altitude", `${hudValue(altitude, " m")} / T ${hudValue(targetAltitude, " m")}`)}
-          ${hudKv("nav demand", `R ${hudValue(navRoll, " deg")} / P ${hudValue(navPitch, " deg")}`)}
-          ${hudKv("GPS info", gpsInfo)}
-        </div><div class="hud-note" title="${escapeHtml(ages)}">magenta direct: TECS.spdem/hdem, ATT.DesRoll/DesPitch/DesYaw | blue nav: CTUN.NavRoll/NavPitch, NTUN.NavBrg/TBrg | sample age: ${escapeHtml(ages)}</div>`;
-        drawAttitudeHud(document.querySelector("#track-hud-canvas"), { roll, pitch, heading, altitude, groundSpeed, airSpeed, targetSpeed, targetAltitude, targetHeading, desRoll, desPitch, navRoll, navPitch, navHeading });
+        const mission = missionInfoAt(time);
+        window.TrackHud?.draw(canvas, {
+          modeName: mode?.name || "unknown",
+          mission,
+          roll: numericFrom(att, ["Roll"]),
+          pitch: numericFrom(att, ["Pitch"]),
+          heading: numericFrom(att, ["Yaw"]) ?? numericFrom(gps, ["GCrs", "Yaw"]),
+          targetHeading: numericFrom(att, ["DesYaw"]),
+          altitude: numericFrom(pos, ["RelHomeAlt", "Alt", "RelOriginAlt"]),
+          targetAltitude: numericFrom(tecs, ["hdem"]),
+          groundSpeed: numericFrom(gps, ["Spd"]),
+          airSpeed: numericFrom(air, ["Airspeed"]),
+          targetSpeed: numericFrom(tecs, ["spdem"]),
+          desRoll: numericFrom(att, ["DesRoll"]),
+          desPitch: numericFrom(att, ["DesPitch"]),
+          navRoll: numericFrom(nav, ["NavRoll"]),
+          navPitch: numericFrom(nav, ["NavPitch"]),
+          navHeading: numericFrom(ntun, ["NavBrg", "TBrg"]),
+        });
       }
 
       function renderToolbar() {
@@ -4133,15 +3933,15 @@
           layer(
             1,
             "Track / Geometry",
-            "当前时间窗口航迹、航点和 3D 姿态复现。",
-            `${trackControlsHtml()}${chartPanel("track-chart")}${chartPanel("track-3d-chart")}`,
-            `<h3>Track bounds</h3><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div><h3>3D view</h3><div class="note">左键/单指旋转；Shift/右键拖动平移；滚轮或双指缩放/平移；俯瞰限制打开时会回到俯瞰侧并禁止转到仰视侧；Reset 3D 恢复自由视角。小模型保留 nose/right/up 颜色提示。</div><h3>Waypoints</h3><div class="table-scroll">${table(summary.waypoints, [
+            "当前任务、航迹窗口和 3D 姿态复现。",
+            `${missionStatusStripHtml()}${trackControlsHtml()}${chartPanel("track-chart")}${track3dPanel()}`,
+            `<details open><summary>Waypoints</summary><div class="table-scroll">${table(summary.waypoints, [
               { key: "index", label: "#" },
               { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
               { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
               { key: "lon", label: "Lon", format: (v) => fmt.format(v) },
               { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
-            ], null)}</div><div class="toolbar-row"><h3>HUD</h3><button id="track-hud-toggle">Hide HUD</button></div><div id="track-hud" class="track-hud"></div>`,
+            ], null)}</div></details><details><summary>Track metadata</summary><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div></details>`,
           ),
           layer(
             2,
@@ -4197,11 +3997,6 @@
         });
         bindWaypointButtons();
         bindTrackControls();
-        document.querySelector("#track-hud-toggle")?.addEventListener("click", () => {
-          state.trackHudVisible = !state.trackHudVisible;
-          updateTrackHud();
-        });
-
         registerCharts([
           {
             id: "alt-chart",
