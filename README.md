@@ -44,6 +44,7 @@ cd ~/work/projects/python/flight-log-viewer
 python3 scripts/summarize_dataset.py
 python3 scripts/inspect_logs.py
 python3 scripts/extract_dataflash_series.py
+python3 scripts/build_mission_sources.py
 ```
 
 Default input dataset:
@@ -61,6 +62,16 @@ public-data/series/*.json
 ```
 
 These generated JSON files are ignored by git and can be deleted/rebuilt at any time from `data/raw/`.
+
+## Mission Task Sources
+
+Mission source reconstruction is separate from flight mode detection. AUTO says the autopilot has mission authority; mission source/current-item data says which task is being executed. Generate source candidates with:
+
+```bash
+python3 scripts/build_mission_sources.py
+```
+
+This writes `public-data/series/mission-sources.json` from available external waypoints and DataFlash `CMD` records. Local manual selections belong in `project-data/mission-overrides.json`, which is ignored by git. See `docs/mission-task-sources.md`.
 
 ## Open The Viewer
 
@@ -88,6 +99,7 @@ python3 -m py_compile scripts/extract_dataflash_series.py scripts/inspect_logs.p
 python3 scripts/summarize_dataset.py
 python3 scripts/inspect_logs.py
 python3 scripts/extract_dataflash_series.py
+python3 scripts/build_mission_sources.py
 python3 -c "from html.parser import HTMLParser; from pathlib import Path; HTMLParser().feed(Path('viewer/index.html').read_text()); print('viewer html ok')"
 curl -I http://127.0.0.1:8000/viewer/index.html
 git diff --check

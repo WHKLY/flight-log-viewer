@@ -13,6 +13,7 @@ build/
 *.egg-info/
 
 # Local data and generated files
+project-data/mission-overrides.json
 data/raw/
 public-data/*.json
 public-data/series/

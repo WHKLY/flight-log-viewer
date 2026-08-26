@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "global_source": "auto",
+  "rules": [
+    {
+      "start_s": 120.0,
+      "end_s": 350.0,
+      "source_id": "onboard_cmd",
+      "seq": 4,
+      "label": "Example: GCS link lost; trust onboard CMD for current mission item"
+    }
+  ],
+  "notes": [
+    "Manual rules override automatic mission source selection by time range.",
+    "Use source_id values such as external_wp, onboard_cmd, or tlog_mission.",
+    "Set seq only when overriding the current mission item; leave seq null to override route source only."
+  ]
+}

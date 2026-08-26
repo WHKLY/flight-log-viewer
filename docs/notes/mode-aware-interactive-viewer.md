@@ -383,6 +383,42 @@ Changes for this pass:
 - Verify camera math directly with node and re-run jsdom click regression.
 - Do not commit until browser behavior is confirmed.
 
+## Mission task source override v21 plan
+
+Goal: show which AUTO mission task the aircraft is executing while allowing manual source/time overrides because tlog coverage can be incomplete during GCS link loss.
+
+Design rules:
+
+- Keep flight mode and mission task separate: AUTO gives control authority; mission source/current item gives the active task target.
+- Build multiple route/task sources instead of trusting a single automatic source: external waypoint file, DataFlash CMD/onboard accepted mission, and later tlog MAVLink mission items/current sequence.
+- Add a persistent manual override file outside generated data so user decisions survive public-data regeneration.
+- Resolve Current Mission Task by time using `manual_override > user_selected_source > auto_suggested_source > missing`.
+- Start with data model and extraction seams before large UI changes.
+
+Implementation for this pass:
+
+- Generate `public-data/series/mission-sources.json` with external waypoint and DataFlash CMD mission sources.
+- Add `project-data/mission-overrides.json` as editable persistent override config.
+- Add docs/schema notes so future tlog mission extraction can plug into the same model.
+- Avoid committing generated public-data unless intentionally preparing sample data.
+
+- Mission task source model: added `scripts/build_mission_sources.py`, generated external waypoint/onboard CMD/tlog placeholder mission source candidates, added ignored local `project-data/mission-overrides.json`, and documented manual override priority.
+
+## Mission task UI and override workflow v22 plan
+
+Goal: expose current AUTO mission task in the viewer and allow manual time-point/time-range source selection when automatic source choice is unreliable.
+
+Implementation for this pass:
+
+- Load `public-data/series/mission-sources.json` and optional `project-data/mission-overrides.json` in the viewer.
+- Add viewer state for global mission source selection and browser-local manual override rules.
+- Show current mission task/source/seq in the Track controls and Inspector.
+- Add controls to create an override starting at the current plane marker time or selected inspect time.
+- Persist UI-created overrides in localStorage because the current static `python3 -m http.server` viewer cannot write back to Termux files.
+- Keep `project-data/mission-overrides.json` as file-based seed/config for later import/export or backend support.
+
+- Mission task UI and override workflow: viewer now loads mission source candidates and optional file overrides, shows Current Mission Task in Track controls and Inspector, supports global source selection, explicit Start/End/Seq local overrides, and uses selected mission source rows for 2D/3D waypoint display.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

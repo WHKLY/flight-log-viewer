@@ -385,7 +385,8 @@
       .custom-controls button,
       .custom-controls select,
       .track-controls button,
-      .track-controls input {
+      .track-controls input,
+      .track-controls select {
         font-size: 12px;
         padding: 5px 9px;
       }
@@ -396,11 +397,24 @@
         width: 100%;
       }
 
-      .custom-controls select {
+      .custom-controls select,
+      .track-controls select,
+      .track-controls input[type="number"] {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 999px;
         color: var(--ink);
+      }
+
+      .mission-source-row label {
+        align-items: center;
+        display: inline-flex;
+        gap: 5px;
+        white-space: nowrap;
+      }
+
+      .mission-source-row input[type="number"] {
+        width: 92px;
       }
 
       .table-scroll {
@@ -905,6 +919,11 @@
         trackPlaybackLastMs: null,
         trackPlaybackFrame: null,
         trackHudVisible: true,
+        missionSourceMode: "auto",
+        missionOverrideStart: "",
+        missionOverrideEnd: "",
+        missionOverrideSeq: "",
+        localMissionOverrideRules: [],
         inspectorTime: null,
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
@@ -921,6 +940,8 @@
       };
       const charts = new Map();
       let modeData = { segments: [] };
+      let missionSourceData = { sources: [] };
+      let missionOverrideData = { rules: [] };
       let inspectorContext = null;
 
       async function loadJson(path) {
@@ -1164,29 +1185,196 @@
         return candidate;
       }
 
-      function plannedWaypointForCommand(commandNumber) {
-        const index = Number(commandNumber);
-        if (!finite(index)) return null;
-        return (inspectorContext?.summary?.waypoints || []).find((waypoint) => Number(waypoint.index) === index) || null;
+      function missionStorageKey() {
+        return "flight-log-viewer:mission-overrides:v1";
+      }
+
+      function loadLocalMissionOverrides() {
+        try {
+          const raw = localStorage.getItem(missionStorageKey());
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed?.rules) ? parsed.rules : [];
+        } catch (_error) {
+          return [];
+        }
+      }
+
+      function saveLocalMissionOverrides() {
+        try {
+          localStorage.setItem(missionStorageKey(), JSON.stringify({ schema_version: 1, rules: state.localMissionOverrideRules }));
+        } catch (_error) {
+          // Local storage can be unavailable in restricted browser modes; the in-memory rules still work.
+        }
+      }
+
+      function missionSources() {
+        return Array.isArray(missionSourceData?.sources) ? missionSourceData.sources : [];
+      }
+
+      function missionSourceById(sourceId) {
+        return missionSources().find((source) => source.id === sourceId) || null;
+      }
+
+      function sourceHasItems(source) {
+        return Array.isArray(source?.items) && source.items.length > 0;
+      }
+
+      function autoMissionSource() {
+        const sources = missionSources();
+        return sources.find((source) => source.id === "tlog_mission" && sourceHasItems(source) && Array.isArray(source.events) && source.events.length)
+          || sources.find((source) => source.id === "onboard_cmd" && sourceHasItems(source))
+          || sources.find((source) => source.id === "external_wp" && sourceHasItems(source))
+          || null;
+      }
+
+      function allMissionOverrideRules() {
+        return [...(missionOverrideData?.rules || []), ...state.localMissionOverrideRules]
+          .filter((rule) => finite(Number(rule.start_s)) && finite(Number(rule.end_s)) && Number(rule.end_s) >= Number(rule.start_s));
+      }
+
+      function missionOverrideAt(time) {
+        if (!finite(time)) return null;
+        const matches = allMissionOverrideRules().filter((rule) => time >= Number(rule.start_s) && time <= Number(rule.end_s));
+        return matches.length ? matches[matches.length - 1] : null;
+      }
+
+      function selectedMissionSource(time = trackMarkerTime()) {
+        const rule = missionOverrideAt(time);
+        if (rule?.source_id) return missionSourceById(rule.source_id) || autoMissionSource();
+        if (state.missionSourceMode && state.missionSourceMode !== "auto") return missionSourceById(state.missionSourceMode) || autoMissionSource();
+        return autoMissionSource();
+      }
+
+      function missionItemBySeq(source, seq) {
+        if (!source || !finite(Number(seq))) return null;
+        return (source.items || []).find((item) => Number(item.seq) === Number(seq)) || null;
+      }
+
+      function previousMissionEvent(source, time) {
+        const events = (source?.events || []).filter((event) => finite(Number(event.time_s))).sort((a, b) => Number(a.time_s) - Number(b.time_s));
+        return previousRow(events, time);
       }
 
       function missionInfoAt(time) {
         const mode = findModeAt(time);
-        const cmdRows = inspectorContext?.groups?.mission?.messages?.CMD || [];
-        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive" };
-        const row = previousRow(cmdRows, time);
-        if (!row || Number(row.time_s) < Number(mode.start_s) - 0.25) return { status: "missing", label: "no CMD", detail: "AUTO segment" };
-        const age = finite(time) && finite(Number(row.time_s)) ? Math.max(0, time - Number(row.time_s)) : null;
-        const commandNumber = Number(row.CNum);
-        const planned = plannedWaypointForCommand(commandNumber);
-        const target = validGeo(Number(row.Lat), Number(row.Lng)) ? `${fmt.format(row.Lat)}, ${fmt.format(row.Lng)}, ${fmt.format(row.Alt)}m` : `alt ${fmt.format(row.Alt)}m`;
+        const rule = missionOverrideAt(time);
+        const source = selectedMissionSource(time);
+        const sourceId = source?.id || "missing";
+        const sourceLabel = source?.label || "missing";
+        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive", source: sourceLabel, source_id: sourceId };
+        if (!source) return { status: "missing", label: "no mission source", detail: "missing", source: "missing", source_id: "missing" };
+
+        let seq = finite(Number(rule?.seq)) ? Number(rule.seq) : null;
+        let event = null;
+        if (seq === null) {
+          event = previousMissionEvent(source, time);
+          if (event && finite(Number(event.seq))) seq = Number(event.seq);
+        }
+        const item = seq === null ? null : missionItemBySeq(source, seq);
+        const used = item || event;
+        if (!used) {
+          return {
+            status: sourceHasItems(source) ? "derived" : "missing",
+            label: `${sourceLabel}: seq unknown`,
+            detail: rule ? `manual source override ${Number(rule.start_s).toFixed(1)}s..${Number(rule.end_s).toFixed(1)}s` : "no timed current item",
+            source: sourceLabel,
+            source_id: sourceId,
+            seq: null,
+          };
+        }
+
+        const command = used.command ?? used.CId;
+        const commandLabel = used.command_name || commandName(command);
+        const lat = used.lat ?? used.Lat;
+        const lon = used.lon ?? used.Lng;
+        const alt = used.alt ?? used.Alt;
+        const age = event?.time_s !== undefined && finite(Number(event.time_s)) ? Math.max(0, time - Number(event.time_s)) : null;
+        const target = validGeo(Number(lat), Number(lon)) ? `${fmt.format(lat)}, ${fmt.format(lon)}, ${fmt.format(alt)}m` : `alt ${fmt.format(alt)}`;
+        const suffix = rule ? "manual override" : state.missionSourceMode !== "auto" ? "selected source" : "auto source";
         return {
-          status: "direct",
-          label: `${commandName(row.CId)} #${finite(commandNumber) ? commandNumber : "?"}`,
+          status: rule ? "direct" : event ? "direct" : "derived",
+          label: `${commandLabel} #${finite(Number(seq)) ? Number(seq) : "?"}`,
           detail: `${target}${age !== null ? ` | age ${fmt.format(age)}s` : ""}`,
-          planned: planned ? `${planned.command_name} #${planned.index}` : "no wp match",
-          params: ["Prm1", "Prm2", "Prm3", "Prm4"].map((key) => `${key}=${fmt.format(Number(row[key]) || 0)}`).join(" "),
+          planned: `${sourceLabel} | ${suffix}`,
+          params: Array.isArray(used.params) ? used.params.map((value, index) => `P${index + 1}=${fmt.format(value)}`).join(" ") : "",
+          source: sourceLabel,
+          source_id: sourceId,
+          seq,
+          override: rule || null,
         };
+      }
+
+      function waypointRowFromMissionItem(item) {
+        return {
+          index: item.seq,
+          current: item.current ?? 0,
+          frame: item.frame ?? 0,
+          command: item.command,
+          command_name: item.command_name || commandName(item.command),
+          param1: item.params?.[0] ?? 0,
+          param2: item.params?.[1] ?? 0,
+          param3: item.params?.[2] ?? 0,
+          param4: item.params?.[3] ?? 0,
+          lat: item.lat,
+          lon: item.lon,
+          alt: item.alt,
+          autocontinue: item.autocontinue ?? 0,
+        };
+      }
+
+      function activeMissionWaypointRows(time = trackMarkerTime()) {
+        const source = selectedMissionSource(time);
+        const rows = (source?.items || []).map(waypointRowFromMissionItem).filter((row) => validGeo(Number(row.lat), Number(row.lon)));
+        return rows.length ? rows : (inspectorContext?.summary?.waypoints || []);
+      }
+
+      function currentMissionDisplayTime() {
+        return finite(state.inspectorTime) ? state.inspectorTime : trackMarkerTime();
+      }
+
+      function missionOverrideStartValue() {
+        return state.missionOverrideStart === "" ? fmt.format(currentMissionDisplayTime()) : state.missionOverrideStart;
+      }
+
+      function missionOverrideEndValue() {
+        const current = currentMissionDisplayTime();
+        const fallback = state.range.end > current ? state.range.end : current;
+        return state.missionOverrideEnd === "" ? fmt.format(fallback) : state.missionOverrideEnd;
+      }
+
+      function missionSourceOptionsHtml() {
+        const options = [`<option value="auto" ${state.missionSourceMode === "auto" ? "selected" : ""}>Auto suggestion</option>`];
+        for (const source of missionSources()) {
+          const disabled = sourceHasItems(source) ? "" : " disabled";
+          const selected = state.missionSourceMode === source.id ? " selected" : "";
+          options.push(`<option value="${escapeHtml(source.id)}"${selected}${disabled}>${escapeHtml(source.label)} (${source.items?.length || 0})</option>`);
+        }
+        return options.join("");
+      }
+
+      function renderMissionTaskCard(time = currentMissionDisplayTime()) {
+        const info = missionInfoAt(time);
+        const rules = allMissionOverrideRules();
+        const override = missionOverrideAt(time);
+        return `<div class="mission-task-card">
+          <div class="kv-grid">
+            <div class="kv"><span>task time</span><strong>${fmt.format(time)}s</strong></div>
+            <div class="kv"><span>source</span><strong>${escapeHtml(info.source || "missing")}</strong></div>
+            <div class="kv"><span>current task</span><strong>${escapeHtml(info.label)} ${statusPill(info.status)}</strong></div>
+            <div class="kv"><span>target</span><strong title="${escapeHtml(info.params || "")}">${escapeHtml(info.detail || "")}</strong></div>
+          </div>
+          <div class="track-button-row mission-source-row">
+            <label>Source<select id="mission-source-mode">${missionSourceOptionsHtml()}</select></label>
+            <label>Start<input id="mission-override-start" type="number" inputmode="decimal" step="0.1" value="${escapeHtml(missionOverrideStartValue())}"></label>
+            <label>End<input id="mission-override-end" type="number" inputmode="decimal" step="0.1" value="${escapeHtml(missionOverrideEndValue())}"></label>
+            <label>Seq<input id="mission-override-seq" type="number" inputmode="numeric" placeholder="optional" value="${escapeHtml(state.missionOverrideSeq)}"></label>
+            <button id="mission-fill-window-override">填入当前窗口</button>
+            <button id="mission-add-override">添加覆盖</button>
+            <button id="mission-clear-local-overrides">清除本机覆盖</button>
+          </div>
+          <div class="note">${override ? `active override: ${fmt.format(override.start_s)}s..${fmt.format(override.end_s)}s source=${escapeHtml(override.source_id || "?")} seq=${escapeHtml(override.seq ?? "source only")}` : "no active manual override"} | local rules ${state.localMissionOverrideRules.length} | file rules ${(missionOverrideData?.rules || []).length}</div>
+        </div>`;
       }
 
       function nearestRow(rows, time) {
@@ -1372,7 +1560,9 @@
               <div class="kv"><span>time</span><strong>${fmt.format(time)}s</strong></div>
               <div class="kv"><span>mode</span><strong>${escapeHtml(modeText)}</strong></div>
               <div class="kv"><span>mission</span><strong>${escapeHtml(mission.label)} ${statusPill(mission.status)}</strong></div>
+              <div class="kv"><span>mission source</span><strong>${escapeHtml(mission.source || "missing")}</strong></div>
               <div class="kv"><span>target</span><strong title="${escapeHtml(mission.params || "")}">${escapeHtml(mission.detail || "")}</strong></div>
+              <div class="kv"><span>selection</span><strong>${escapeHtml(mission.planned || "missing")}</strong></div>
             </div></div>
           </div>
           <div class="inspector-body">${controlChains.map((chain, index) => renderInspectorChain(chain, index, time)).join("")}</div>
@@ -1635,6 +1825,10 @@
         ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-camera-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
           <section class="track-section">
+            <div class="track-section-title"><strong>Current Mission Task</strong><span class="range-text">manual source override capable</span></div>
+            ${renderMissionTaskCard()}
+          </section>
+          <section class="track-section">
             <div class="track-section-title"><strong>Track overlays</strong><span class="range-text">一键显示/隐藏</span></div>
             <div class="track-button-row">
               <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">航迹 ${state.trackShowPath ? "显示" : "隐藏"}</button>
@@ -1721,6 +1915,16 @@
           playButton.textContent = state.trackPlaying ? "Pause" : "Play";
           playButton.classList.toggle("active", state.trackPlaying);
         }
+        const missionTask = document.querySelector(".mission-task-card");
+        if (missionTask) missionTask.outerHTML = renderMissionTaskCard();
+        const sourceSelect = document.querySelector("#mission-source-mode");
+        if (sourceSelect && document.activeElement !== sourceSelect) sourceSelect.value = state.missionSourceMode;
+        const startInput = document.querySelector("#mission-override-start");
+        if (startInput && document.activeElement !== startInput) startInput.value = missionOverrideStartValue();
+        const endInput = document.querySelector("#mission-override-end");
+        if (endInput && document.activeElement !== endInput) endInput.value = missionOverrideEndValue();
+        const seqInput = document.querySelector("#mission-override-seq");
+        if (seqInput && document.activeElement !== seqInput) seqInput.value = state.missionOverrideSeq;
         const viewText = document.querySelector("#track-3d-view-text");
         if (viewText) viewText.textContent = `${track3dViewModeLabel(state.track3dViewMode)} | ${state.track3dOverheadLock ? "locked overhead" : "free pitch"}`;
         document.querySelectorAll("[data-track-camera-mode]").forEach((button) => {
@@ -1801,6 +2005,42 @@
             return;
           }
 
+          if (button.id === "mission-fill-window-override") {
+            state.missionOverrideStart = fmt.format(state.range.start);
+            state.missionOverrideEnd = fmt.format(state.range.end);
+            updateTrackControls();
+            return;
+          }
+
+          if (button.id === "mission-add-override") {
+            const current = currentMissionDisplayTime();
+            const startValue = Number(state.missionOverrideStart === "" ? current : state.missionOverrideStart);
+            const endValue = Number(state.missionOverrideEnd === "" ? current : state.missionOverrideEnd);
+            const start = Math.min(startValue, endValue);
+            const end = Math.max(startValue, endValue);
+            const source = selectedMissionSource(start) || autoMissionSource();
+            if (source && finite(start) && finite(end)) {
+              const seqValue = Number(state.missionOverrideSeq);
+              state.localMissionOverrideRules.push({
+                start_s: start,
+                end_s: end,
+                source_id: source.id,
+                seq: finite(seqValue) ? seqValue : null,
+                label: "viewer local override",
+              });
+              saveLocalMissionOverrides();
+              renderAllCharts();
+            }
+            return;
+          }
+
+          if (button.id === "mission-clear-local-overrides") {
+            state.localMissionOverrideRules = [];
+            saveLocalMissionOverrides();
+            renderAllCharts();
+            return;
+          }
+
           if (button.id === "track-play-toggle") {
             toggleTrackPlayback();
             return;
@@ -1818,9 +2058,31 @@
           }
         });
 
-        controls.querySelector("#track-marker-time")?.addEventListener("input", (event) => {
-          stopTrackPlayback();
-          setTrackMarkerTime(event.target.value);
+        controls.addEventListener("change", (event) => {
+          if (event.target?.id === "mission-source-mode") {
+            state.missionSourceMode = event.target.value || "auto";
+            for (const config of charts.values()) {
+              if (config.type === "track" || config.type === "track3d") {
+                config.projected = null;
+                config.projected3d = null;
+                config.routeSourceKey = null;
+              }
+            }
+            renderAllCharts();
+          }
+        });
+
+        controls.addEventListener("input", (event) => {
+          if (event.target?.id === "track-marker-time") {
+            stopTrackPlayback();
+            setTrackMarkerTime(event.target.value);
+          } else if (event.target?.id === "mission-override-start") {
+            state.missionOverrideStart = event.target.value;
+          } else if (event.target?.id === "mission-override-end") {
+            state.missionOverrideEnd = event.target.value;
+          } else if (event.target?.id === "mission-override-seq") {
+            state.missionOverrideSeq = event.target.value;
+          }
         });
 
         updateTrackControls();
@@ -3354,9 +3616,22 @@
         });
       }
 
+      function syncTrackMissionRoute(config) {
+        if (config.type !== "track" && config.type !== "track3d") return;
+        const source = selectedMissionSource(trackMarkerTime());
+        const rows = activeMissionWaypointRows(trackMarkerTime());
+        const routeKey = `${source?.id || "summary"}:${rows.length}:${state.highlightedWaypointIndex ?? "none"}`;
+        if (config.routeSourceKey === routeKey) return;
+        config.routeSourceKey = routeKey;
+        config.waypointRows = rows;
+        config.projected = null;
+        config.projected3d = null;
+      }
+
       function renderAllCharts() {
         updateTrackControls();
         for (const config of charts.values()) {
+          syncTrackMissionRoute(config);
           if (config.type === "track") drawTrackChart(config);
           else if (config.type === "track3d") drawTrack3dChart(config);
           else drawLineChart(config);
@@ -3748,8 +4023,10 @@
           loadJsonOptional("../public-data/series/io.json"),
           loadJsonOptional("../public-data/series/events.json"),
           loadJsonOptional("../public-data/series/modes.json"),
+          loadJsonOptional("../public-data/series/mission-sources.json"),
+          loadJsonOptional("../project-data/mission-overrides.json"),
         ]);
-        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw] = loaded;
+        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw, missionSourcesRaw, missionOverridesRaw] = loaded;
         const summary = summaryRaw || defaultSummary();
         const manifest = manifestRaw || defaultManifest();
         const track = withMessages(trackRaw, ["POS", "GPS"]);
@@ -3762,6 +4039,8 @@
         const io = withMessages(ioRaw, ["RCOU", "RCIN"]);
         const events = withMessages(eventsRaw, ["MODE", "MSG"]);
         const modes = modesRaw || { compatibility: manifest.compatibility, mode_map_source: manifest.compatibility.mode_map_source, mode_map: {}, segments: [], focus_ranges: {} };
+        const missionSources = missionSourcesRaw || { schema_version: 1, sources: [] };
+        const missionOverrides = missionOverridesRaw || { schema_version: 1, rules: [] };
         const missing = [
           ["dataset-summary", summaryRaw],
           ["manifest", manifestRaw],
@@ -3775,8 +4054,12 @@
           ["io", ioRaw],
           ["events", eventsRaw],
           ["modes", modesRaw],
+          ["mission-sources", missionSourcesRaw],
         ].filter(([, value]) => !value).map(([name]) => name);
         modeData = modes;
+        missionSourceData = missionSources;
+        missionOverrideData = missionOverrides;
+        state.localMissionOverrideRules = loadLocalMissionOverrides();
         inspectorContext = {
           summary,
           groups: { track, mission, attitude, navigation, tecs, pid, motion, io, events },
