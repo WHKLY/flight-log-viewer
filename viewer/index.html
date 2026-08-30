@@ -1280,12 +1280,19 @@
         return Array.isArray(source?.items) && source.items.length > 0;
       }
 
+      function tlogRouteComplete(source) {
+        if (!source || source.id !== "tlog_mission" || !sourceHasItems(source)) return false;
+        if (!Array.isArray(source.events) || !source.events.length) return false;
+        return source.quality?.route_complete !== false;
+      }
+
       function autoMissionSource() {
         const sources = missionSources();
-        return sources.find((source) => source.id === "tlog_mission" && sourceHasItems(source) && Array.isArray(source.events) && source.events.length)
-          || sources.find((source) => source.id === "onboard_cmd" && sourceHasItems(source))
-          || sources.find((source) => source.id === "external_wp" && sourceHasItems(source))
-          || null;
+        const completeTlog = sources.find((source) => tlogRouteComplete(source));
+        const onboard = sources.find((source) => source.id === "onboard_cmd" && sourceHasItems(source));
+        const external = sources.find((source) => source.id === "external_wp" && sourceHasItems(source));
+        const partialTlog = sources.find((source) => source.id === "tlog_mission" && sourceHasItems(source));
+        return completeTlog || onboard || external || partialTlog || null;
       }
 
       function allMissionOverrideRules() {
@@ -1306,9 +1313,27 @@
         return autoMissionSource();
       }
 
-      function missionItemBySeq(source, seq) {
+      function missionVersionAt(source, time) {
+        const versions = Array.isArray(source?.versions) ? source.versions : [];
+        if (!versions.length || !finite(Number(time))) return null;
+        let selected = null;
+        for (const version of versions) {
+          const start = Number(version.start_s);
+          const end = finite(Number(version.end_s)) ? Number(version.end_s) : Infinity;
+          if (finite(start) && time >= start && time < end) selected = version;
+          if (finite(start) && start > time) break;
+        }
+        return selected || versions.find((version) => Array.isArray(version.items) && version.items.length) || null;
+      }
+
+      function missionItemsAt(source, time) {
+        const version = missionVersionAt(source, time);
+        return Array.isArray(version?.items) && version.items.length ? version.items : (source?.items || []);
+      }
+
+      function missionItemBySeq(source, seq, time = trackMarkerTime()) {
         if (!source || !finite(Number(seq))) return null;
-        return (source.items || []).find((item) => Number(item.seq) === Number(seq)) || null;
+        return missionItemsAt(source, time).find((item) => Number(item.seq) === Number(seq)) || null;
       }
 
       function previousMissionEvent(source, time) {
@@ -1331,7 +1356,7 @@
           event = previousMissionEvent(source, time);
           if (event && finite(Number(event.seq))) seq = Number(event.seq);
         }
-        const item = seq === null ? null : missionItemBySeq(source, seq);
+        const item = seq === null ? null : missionItemBySeq(source, seq, time);
         const used = item || event;
         if (!used) {
           return {
@@ -1385,7 +1410,7 @@
 
       function activeMissionWaypointRows(time = trackMarkerTime()) {
         const source = selectedMissionSource(time);
-        const rows = (source?.items || []).map(waypointRowFromMissionItem).filter((row) => validGeo(Number(row.lat), Number(row.lon)));
+        const rows = missionItemsAt(source, time).map(waypointRowFromMissionItem).filter((row) => validGeo(Number(row.lat), Number(row.lon)));
         return rows.length ? rows : (inspectorContext?.summary?.waypoints || []);
       }
 

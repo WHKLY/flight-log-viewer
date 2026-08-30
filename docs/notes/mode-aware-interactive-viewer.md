@@ -448,6 +448,35 @@ Result for this pass:
 - Rebuilt Track controls as a quick action bar plus collapsible groups for marker/playback, path filters, mission source overrides, and 3D camera.
 - Removed the old table-style HUD DOM card and old inline HUD drawing helpers from `index.html`.
 
+
+## TLog mission extraction v24 plan
+
+Goal: parse onboard/GCS MAVLink mission information from Mission Planner `.tlog` files so flights without an external waypoint file can still show the route that was communicated to or reported by the flight controller.
+
+Current state:
+
+- `scripts/extract_dataflash_series.py` decodes selected DataFlash `.BIN` messages from in-log FMT records and already extracts `CMD` rows into `series/mission.json`.
+- `scripts/build_mission_sources.py` converts external `.waypoints` and DataFlash `CMD` rows into selectable mission sources, but `tlog_mission` is still a placeholder.
+- Flight2 `ZC_20260826_1533_flight2` has no external waypoint/param file, but its BIN has `CMD=56` and its tlog has mission traffic including `MISSION_CURRENT`, `MISSION_COUNT`, `MISSION_ITEM`, and `MISSION_ITEM_INT`.
+
+Implementation for this pass:
+
+- Add a no-third-party MAVLink frame scanner for Mission Planner `.tlog` files in `build_mission_sources.py`.
+- Decode the minimal mission messages needed for viewer use: `MISSION_ITEM`, `MISSION_ITEM_INT`, `MISSION_COUNT`, `MISSION_CURRENT`, `MISSION_ITEM_REACHED`, and set-current/request metadata where useful.
+- Build `tlog_mission.items` from latest mission items by sequence and `tlog_mission.events` from current/reached sequence messages.
+- Keep DataFlash `onboard_cmd` and manual source/sequence override behavior unchanged, because tlog can be incomplete when the GCS link drops.
+- Validate against `data/26.8.26侦察/ZC_20260826_1533_flight2` using temporary output before touching generated project data.
+
+
+Result for this pass:
+
+- `scripts/build_mission_sources.py` now decodes CRC-valid MAVLink mission frames from Mission Planner `.tlog` files without requiring `pymavlink`.
+- `tlog_mission` now includes decoded `MISSION_ITEM_INT`/`MISSION_ITEM` route items when present, `MISSION_CURRENT`/`MISSION_ITEM_REACHED` events for current seq history, mission counts, message counts, and time-alignment metadata.
+- DataFlash `onboard_cmd` now emits mission `versions` and uses the latest complete mission version for static `items`, preventing different onboard mission uploads from being mixed by sequence number.
+- Viewer mission lookup now selects source route versions by time, so current mission task and waypoint geometry can follow onboard mission rewrites.
+- Auto mission-source selection now prefers complete tlog routes, then complete DataFlash onboard CMD, then external waypoints, and only falls back to partial tlog data when no better route source exists.
+- Flight2 validation: `onboard_cmd` produced 2 complete route versions (`17` items then `12` items); `tlog_mission` produced `2460` current-seq events but only `1` located route item, so it is marked `route_complete=false`.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.
