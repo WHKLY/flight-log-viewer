@@ -1,19 +1,18 @@
-const DATA_ROOT = "../public-data";
+import { loadViewerData } from "./data/loader.mjs";
+import {
+  buildInitialSelection,
+  selectionReadout,
+  sourceRegistryList,
+} from "./data/sources.mjs";
+import { missionSourceOptions, missionSources } from "./data/mission.mjs";
+import { parameterModes, parameterSample, selectedParameterSet } from "./data/parameters.mjs";
+import { signalList, signalSummary } from "./data/signals.mjs";
 
 const state = {
   data: null,
   routeSource: "",
   currentSource: "",
   parameterSource: "merged",
-};
-
-const files = {
-  dataset: "dataset.json",
-  sources: "sources.json",
-  signals: "signals.json",
-  modes: "domains/modes.json",
-  mission: "domains/mission.json",
-  parameters: "domains/parameters.json",
 };
 
 function $(selector) {
@@ -30,57 +29,27 @@ function escapeHtml(value) {
   })[char]);
 }
 
-async function loadJson(path) {
-  const response = await fetch(`${DATA_ROOT}/${path}`, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}: ${response.status}`);
-  }
-  return response.json();
-}
-
-async function loadAll() {
-  const entries = await Promise.all(Object.entries(files).map(async ([key, path]) => [key, await loadJson(path)]));
-  return Object.fromEntries(entries);
-}
-
 function fmt(value, digits = 2) {
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(digits) : "missing";
 }
 
-function sourceOptions(sources, selected) {
-  if (!sources.length) return '<option value="">missing</option>';
-  return sources
-    .map((source) => `<option value="${escapeHtml(source.id)}" ${source.id === selected ? "selected" : ""}>${escapeHtml(source.label || source.id)}</option>`)
+function optionHtml(options, selected) {
+  if (!options.length) return '<option value="">missing</option>';
+  return options
+    .map((option) => `<option value="${escapeHtml(option.id)}" ${option.id === selected ? "selected" : ""} ${option.disabled ? "disabled" : ""}>${escapeHtml(option.label || option.id)}</option>`)
     .join("");
-}
-
-function parameterOptions(parameters) {
-  return (parameters.selection_modes || [])
-    .map((mode) => `<option value="${escapeHtml(mode)}" ${mode === state.parameterSource ? "selected" : ""} ${parameters.available?.[mode] ? "" : "disabled"}>${escapeHtml(mode)}</option>`)
-    .join("");
-}
-
-function sourceRegistryList(sourcesPayload) {
-  return Object.values(sourcesPayload.sources || {});
-}
-
-function missionSources() {
-  return state.data?.mission?.sources || [];
-}
-
-function defaultSourceId(sources) {
-  return sources.find((source) => source.quality?.item_count > 0 || source.items?.length > 0)?.id || sources[0]?.id || "";
 }
 
 function initializeSelections() {
-  const sources = missionSources();
-  state.routeSource = state.routeSource || defaultSourceId(sources);
-  state.currentSource = state.currentSource || defaultSourceId(sources);
-  const modes = state.data.parameters.selection_modes || [];
-  if (!modes.includes(state.parameterSource) || !state.data.parameters.available?.[state.parameterSource]) {
-    state.parameterSource = modes.find((mode) => state.data.parameters.available?.[mode]) || "merged";
-  }
+  const next = buildInitialSelection(state.data, {
+    routeSource: state.routeSource,
+    currentSource: state.currentSource,
+    parameterSource: state.parameterSource,
+  });
+  state.routeSource = next.routeSource;
+  state.currentSource = next.currentSource;
+  state.parameterSource = next.parameterSource;
 }
 
 function renderMetric(label, value, tagClass = "") {
@@ -92,12 +61,22 @@ function renderStatus() {
   const firmware = dataset.firmware || {};
   const profile = dataset.compatibility_profile || {};
   const counts = dataset.counts || {};
+  const signals = signalSummary(state.data);
   $("#status-grid").innerHTML = [
     renderMetric("Firmware", firmware.version ? `${firmware.vehicle} ${firmware.version}` : "unknown", firmware.confidence === "high" ? "good" : "warn"),
     renderMetric("Profile", profile.id || "missing", profile.confidence === "source-matched" ? "good" : "warn"),
     renderMetric("DataFlash records", counts.dataflash_records ?? 0),
-    renderMetric("Signals", `${counts.numeric_signals ?? 0} numeric / ${counts.signals ?? 0} total`),
+    renderMetric("Signals", `${signals.numeric} numeric / ${signals.total} total`),
   ].join("");
+}
+
+function renderWarnings() {
+  const warnings = state.data.dataset.warnings || [];
+  if (!warnings.length) return;
+  $("#status-grid").insertAdjacentHTML(
+    "beforeend",
+    renderMetric("Warnings", warnings.length, warnings.some((warning) => warning.severity === "error") ? "bad" : "warn"),
+  );
 }
 
 function renderDatasetSummary() {
@@ -115,15 +94,15 @@ function renderDatasetSummary() {
 }
 
 function renderSelectors() {
-  const mission = missionSources();
-  $("#route-source").innerHTML = sourceOptions(mission, state.routeSource);
-  $("#current-source").innerHTML = sourceOptions(mission, state.currentSource);
-  $("#parameter-source").innerHTML = parameterOptions(state.data.parameters);
-  $("#selection-readout").textContent = `route=${state.routeSource || "missing"} | current=${state.currentSource || "missing"} | params=${state.parameterSource}`;
+  const options = missionSourceOptions(state.data);
+  $("#route-source").innerHTML = optionHtml(options, state.routeSource);
+  $("#current-source").innerHTML = optionHtml(options, state.currentSource);
+  $("#parameter-source").innerHTML = optionHtml(parameterModes(state.data), state.parameterSource);
+  $("#selection-readout").textContent = selectionReadout(state);
 }
 
 function renderSources() {
-  const sources = sourceRegistryList(state.data.sources);
+  const sources = sourceRegistryList(state.data);
   $("#source-count").textContent = String(sources.length);
   $("#source-list").innerHTML = sources
     .map((source) => `
@@ -138,7 +117,7 @@ function renderSources() {
 }
 
 function renderMission() {
-  const sources = missionSources();
+  const sources = missionSources(state.data);
   $("#mission-count").textContent = String(sources.length);
   $("#mission-list").innerHTML = sources
     .map((source) => {
@@ -174,8 +153,8 @@ function renderModes() {
 function renderParameters() {
   const parameters = state.data.parameters;
   const counts = parameters.counts || {};
-  const set = parameters.sets?.[state.parameterSource] || parameters.sets?.merged || {};
-  const sample = Object.entries(set.control_params || set.params || {}).slice(0, 18);
+  const set = selectedParameterSet(state.data, state.parameterSource);
+  const sample = parameterSample(state.data, state.parameterSource, 18);
   $("#parameter-summary").innerHTML = `
     <div class="card">
       <h3>${escapeHtml(set.label || state.parameterSource)}</h3>
@@ -191,7 +170,7 @@ function renderParameters() {
 }
 
 function renderSignals() {
-  const signals = Object.values(state.data.signals.signals || {});
+  const signals = signalList(state.data);
   $("#signal-count").textContent = String(signals.length);
   $("#signal-list").innerHTML = signals.slice(0, 300)
     .map((signal) => `
@@ -202,15 +181,6 @@ function renderSignals() {
       </div>
     `)
     .join("");
-}
-
-function renderWarnings() {
-  const warnings = state.data.dataset.warnings || [];
-  if (!warnings.length) return;
-  $("#status-grid").insertAdjacentHTML(
-    "beforeend",
-    renderMetric("Warnings", warnings.length, warnings.some((warning) => warning.severity === "error") ? "bad" : "warn"),
-  );
 }
 
 function render() {
@@ -229,10 +199,10 @@ function render() {
 async function boot() {
   try {
     $("#dataset-summary").textContent = "Loading schema...";
-    state.data = await loadAll();
+    state.data = await loadViewerData();
     render();
   } catch (error) {
-    document.body.innerHTML = `<main class="app-shell"><section class="panel error"><h1>Failed to load data</h1><p>${escapeHtml(error.message)}</p><p>Run <code>bash scripts/start_viewer.sh</code> from the project root.</p></section></main>`;
+    document.body.innerHTML = `<main class="app-shell"><section class="panel error"><h1>Failed to load data</h1><p>${escapeHtml(error.message)}</p><p>Run <code>./scripts/start_viewer.sh</code> from the project root.</p></section></main>`;
   }
 }
 
@@ -252,4 +222,3 @@ $("#parameter-source").addEventListener("change", (event) => {
 });
 
 boot();
-
