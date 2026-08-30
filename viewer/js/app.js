@@ -1,19 +1,11 @@
 import { loadViewerData } from "./data/loader.mjs";
-import {
-  buildInitialSelection,
-  selectionReadout,
-  sourceRegistryList,
-} from "./data/sources.mjs";
+import { selectionReadout, sourceRegistryList } from "./data/sources.mjs";
 import { missionSourceOptions, missionSources } from "./data/mission.mjs";
 import { parameterModes, parameterSample, selectedParameterSet } from "./data/parameters.mjs";
 import { signalList, signalSummary } from "./data/signals.mjs";
+import { attachData, createInitialState, updateSelection } from "./state.mjs";
 
-const state = {
-  data: null,
-  routeSource: "",
-  currentSource: "",
-  parameterSource: "merged",
-};
+const state = createInitialState();
 
 function $(selector) {
   return document.querySelector(selector);
@@ -39,17 +31,6 @@ function optionHtml(options, selected) {
   return options
     .map((option) => `<option value="${escapeHtml(option.id)}" ${option.id === selected ? "selected" : ""} ${option.disabled ? "disabled" : ""}>${escapeHtml(option.label || option.id)}</option>`)
     .join("");
-}
-
-function initializeSelections() {
-  const next = buildInitialSelection(state.data, {
-    routeSource: state.routeSource,
-    currentSource: state.currentSource,
-    parameterSource: state.parameterSource,
-  });
-  state.routeSource = next.routeSource;
-  state.currentSource = next.currentSource;
-  state.parameterSource = next.parameterSource;
 }
 
 function renderMetric(label, value, tagClass = "") {
@@ -94,11 +75,11 @@ function renderDatasetSummary() {
 }
 
 function renderSelectors() {
-  const options = missionSourceOptions(state.data);
-  $("#route-source").innerHTML = optionHtml(options, state.routeSource);
-  $("#current-source").innerHTML = optionHtml(options, state.currentSource);
-  $("#parameter-source").innerHTML = optionHtml(parameterModes(state.data), state.parameterSource);
-  $("#selection-readout").textContent = selectionReadout(state);
+  const selection = state.selection;
+  $("#route-source").innerHTML = optionHtml(missionSourceOptions(state.data), selection.routeSource);
+  $("#current-source").innerHTML = optionHtml(missionSourceOptions(state.data), selection.currentSource);
+  $("#parameter-source").innerHTML = optionHtml(parameterModes(state.data), selection.parameterSource);
+  $("#selection-readout").textContent = selectionReadout(selection);
 }
 
 function renderSources() {
@@ -153,11 +134,11 @@ function renderModes() {
 function renderParameters() {
   const parameters = state.data.parameters;
   const counts = parameters.counts || {};
-  const set = selectedParameterSet(state.data, state.parameterSource);
-  const sample = parameterSample(state.data, state.parameterSource, 18);
+  const set = selectedParameterSet(state.data, state.selection.parameterSource);
+  const sample = parameterSample(state.data, state.selection.parameterSource, 18);
   $("#parameter-summary").innerHTML = `
     <div class="card">
-      <h3>${escapeHtml(set.label || state.parameterSource)}</h3>
+      <h3>${escapeHtml(set.label || state.selection.parameterSource)}</h3>
       <div class="meta">merged ${counts.merged ?? 0}</div>
       <div class="meta">param file ${counts.param_file ?? 0}</div>
       <div class="meta">DataFlash latest ${counts.dataflash_latest ?? 0}</div>
@@ -184,7 +165,6 @@ function renderSignals() {
 }
 
 function render() {
-  initializeSelections();
   renderStatus();
   renderWarnings();
   renderDatasetSummary();
@@ -199,7 +179,7 @@ function render() {
 async function boot() {
   try {
     $("#dataset-summary").textContent = "Loading schema...";
-    state.data = await loadViewerData();
+    attachData(state, await loadViewerData());
     render();
   } catch (error) {
     document.body.innerHTML = `<main class="app-shell"><section class="panel error"><h1>Failed to load data</h1><p>${escapeHtml(error.message)}</p><p>Run <code>./scripts/start_viewer.sh</code> from the project root.</p></section></main>`;
@@ -208,15 +188,15 @@ async function boot() {
 
 $("#reload-button").addEventListener("click", boot);
 $("#route-source").addEventListener("change", (event) => {
-  state.routeSource = event.target.value;
+  updateSelection(state, "routeSource", event.target.value);
   renderSelectors();
 });
 $("#current-source").addEventListener("change", (event) => {
-  state.currentSource = event.target.value;
+  updateSelection(state, "currentSource", event.target.value);
   renderSelectors();
 });
 $("#parameter-source").addEventListener("change", (event) => {
-  state.parameterSource = event.target.value;
+  updateSelection(state, "parameterSource", event.target.value);
   renderSelectors();
   renderParameters();
 });
