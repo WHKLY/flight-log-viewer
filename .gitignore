@@ -17,6 +17,7 @@ project-data/mission-overrides.json
 data/raw/
 public-data/*.json
 public-data/series/
+public-data/domains/
 docs/source-review/extracted/
 
 # Termux/editor noise
