@@ -8,6 +8,9 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
+from flv.parsers.param_file import parse_param_file as parse_param_file_shared
+from flv.parsers.qgc_waypoints import parse_waypoints_file as parse_waypoints_file_shared
+
 
 try:
     from extract_dataflash_series import extract_dataflash
@@ -212,14 +215,14 @@ def main() -> int:
     waypoint_path = find_first(files, ".waypoints")
     bin_path = find_first(files, ".bin")
 
-    file_params = parse_param_file(param_path) if param_path else {}
+    file_params = parse_param_file_shared(param_path) if param_path else {}
     bin_params, bin_param_timeline = parse_dataflash_params(bin_path)
     params = {**bin_params, **file_params}
     control_params = control_subset(params)
     file_control_params = control_subset(file_params)
     bin_control_params = control_subset(bin_params)
 
-    waypoints = parse_waypoints_file(waypoint_path) if waypoint_path else []
+    waypoints = parse_waypoints_file_shared(waypoint_path) if waypoint_path else []
 
     summary = {
         "dataset": str(dataset),

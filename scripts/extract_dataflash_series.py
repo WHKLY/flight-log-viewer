@@ -10,6 +10,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
+from flv.parsers.dataflash import extract_dataflash as extract_dataflash_shared
+
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -263,6 +265,8 @@ def choose_source(files: Iterable[Path], suffix: str) -> Path | None:
 
 
 def extract_dataflash(path: Path) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    return extract_dataflash_shared(path, TARGET_MESSAGES, DATAFLASH_HEADER)
+
     data = path.read_bytes()
     formats: dict[int, DataFlashFormat] = {
         0x80: DataFlashFormat(
