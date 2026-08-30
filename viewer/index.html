@@ -988,6 +988,7 @@
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
         fontScale: "normal",
+        parameterSourceMode: "auto",
         track3dView: { yaw: -0.72, pitch: -0.55, scale: null, panX: 0, panY: 0, userScaled: false },
         track3dOverheadLock: true,
         track3dViewMode: "free",
@@ -1025,6 +1026,9 @@
           selected_files: { param: null, waypoints: null, bin_logs: [], tlogs: [], rlogs: [] },
           duplicate_groups: {},
           control_params: {},
+          parameter_sets: {},
+          dataflash_param_timeline: [],
+          parameter_sources: {},
           waypoints: [],
         };
       }
@@ -1414,6 +1418,31 @@
         return rows.length ? rows : (inspectorContext?.summary?.waypoints || []);
       }
 
+      function currentNavigationSeq(time = trackMarkerTime()) {
+        const info = missionInfoAt(time);
+        const seq = Number(info.seq);
+        return finite(seq) ? seq : null;
+      }
+
+      function trackWaypointPanelHtml(time = trackMarkerTime()) {
+        const source = selectedMissionSource(time);
+        const version = missionVersionAt(source, time);
+        const currentSeq = currentNavigationSeq(time);
+        const rows = activeMissionWaypointRows(time);
+        const sourceLabel = source?.label || "summary waypoint fallback";
+        const versionText = version ? `version ${fmt.format(version.start_s)}s${finite(Number(version.end_s)) ? ".." + fmt.format(version.end_s) + "s" : "..end"}` : "static route";
+        return `<div id="track-waypoint-panel">
+          <div class="note">${escapeHtml(sourceLabel)} | ${escapeHtml(versionText)} | current seq ${currentSeq === null ? "missing" : escapeHtml(currentSeq)}</div>
+          <div class="table-scroll">${table(rows, [
+            { key: "index", label: "#", html: (row) => `${Number(row.index) === currentSeq ? statusPill("direct") : ""}${escapeHtml(row.index ?? "")}` },
+            { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
+            { key: "lat", label: "Lat", format: (value) => fmt.format(value) },
+            { key: "lon", label: "Lon", format: (value) => fmt.format(value) },
+            { key: "alt", label: "Alt", format: (value) => fmt.format(value) },
+          ], null)}</div>
+        </div>`;
+      }
+
       function currentMissionDisplayTime() {
         return finite(state.inspectorTime) ? state.inspectorTime : trackMarkerTime();
       }
@@ -1523,37 +1552,144 @@
         return spec.derive ? sampleDerivedValue(spec, time) : sampleLoggedValue(spec, time);
       }
 
-      function parameterMatches(names) {
-        const params = inspectorContext?.summary?.control_params || {};
+      function parameterSourceModes() {
+        const summary = inspectorContext?.summary || {};
+        const available = summary.parameter_sources?.available || {};
+        return [
+          ["auto", "Auto / merged", true],
+          ["merged", "Merged", available.merged !== false],
+          ["param_file", ".param file", !!available.param_file],
+          ["dataflash_latest", "DataFlash latest", !!available.dataflash_latest],
+          ["dataflash_time", "DataFlash time-aware", !!available.dataflash_time],
+        ];
+      }
+
+      function parameterSourceOptionsHtml() {
+        return parameterSourceModes()
+          .map(([mode, label, enabled]) => `<option value="${mode}" ${state.parameterSourceMode === mode ? "selected" : ""}${enabled ? "" : " disabled"}>${label}</option>`)
+          .join("");
+      }
+
+      function parameterResolveTime() {
+        if (finite(state.inspectorTime)) return state.inspectorTime;
+        if (finite(state.trackMarkerTime)) return trackMarkerTime();
+        return state.range.end;
+      }
+
+      function selectedParameterSet() {
+        const summary = inspectorContext?.summary || {};
+        const sets = summary.parameter_sets || {};
+        const mode = state.parameterSourceMode === "auto" ? "merged" : state.parameterSourceMode;
+        if (mode === "dataflash_time") return sets.dataflash_latest || { params: summary.control_params || {}, control_params: summary.control_params || {}, label: "DataFlash time-aware" };
+        return sets[mode] || sets.merged || { params: summary.control_params || {}, control_params: summary.control_params || {}, label: "legacy control params" };
+      }
+
+      function parameterSourceLabel() {
+        if (state.parameterSourceMode === "dataflash_time") return "DataFlash time-aware";
+        return selectedParameterSet().label || state.parameterSourceMode;
+      }
+
+      function updateParameterSourceText() {
+        const node = document.querySelector("#param-source-text");
+        if (!node) return;
+        const summary = inspectorContext?.summary || {};
+        const counts = summary.counts || {};
+        const timeText = state.parameterSourceMode === "dataflash_time" ? ` | lookup time ${fmt.format(parameterResolveTime())}s` : "";
+        node.textContent = `Parameter source: ${parameterSourceLabel()}${timeText} | file ${counts.file_parameters || 0} | DataFlash ${counts.dataflash_parameters || 0} (${counts.dataflash_parameter_records || 0} records)`;
+      }
+
+      function dataflashParamAt(name, time) {
+        const timeline = inspectorContext?.summary?.dataflash_param_timeline || [];
+        let best = null;
+        for (const item of timeline) {
+          if (item.name !== name) continue;
+          const itemTime = Number(item.time_s);
+          if (!finite(itemTime)) continue;
+          if (finite(time) && itemTime <= time) best = item;
+          else if (!finite(time) && !best) best = item;
+          else if (finite(time) && itemTime > time) break;
+        }
+        return best;
+      }
+
+      function resolveParameter(name, time = parameterResolveTime()) {
+        if (state.parameterSourceMode === "dataflash_time") {
+          const timed = dataflashParamAt(name, time);
+          if (timed) return { name, value: timed.value, source: "DataFlash time", time_s: timed.time_s, status: "direct" };
+          return { name, value: "missing", source: "DataFlash time", time_s: null, status: "missing" };
+        }
+        const set = selectedParameterSet();
+        const params = set.params || set.control_params || {};
+        if (Object.prototype.hasOwnProperty.call(params, name)) {
+          return { name, value: params[name], source: set.label || parameterSourceLabel(), time_s: null, status: "direct" };
+        }
+        return { name, value: "missing", source: set.label || parameterSourceLabel(), time_s: null, status: "missing" };
+      }
+
+      function parameterNamesForPrefix(prefix) {
+        const names = new Set();
+        const set = selectedParameterSet();
+        for (const name of Object.keys(set.params || set.control_params || {})) {
+          if (name.startsWith(prefix)) names.add(name);
+        }
+        if (state.parameterSourceMode === "dataflash_time") {
+          for (const item of inspectorContext?.summary?.dataflash_param_timeline || []) {
+            if (String(item.name || "").startsWith(prefix)) names.add(item.name);
+          }
+        }
+        return [...names].sort();
+      }
+
+      function parameterMatches(names, time = parameterResolveTime()) {
         const found = [];
         for (const name of names) {
           if (name.endsWith("*")) {
             const prefix = name.slice(0, -1);
-            for (const key of Object.keys(params).sort()) {
-              if (key.startsWith(prefix)) found.push([key, params[key]]);
-            }
-          } else if (Object.prototype.hasOwnProperty.call(params, name)) {
-            found.push([name, params[name]]);
+            for (const key of parameterNamesForPrefix(prefix)) found.push(resolveParameter(key, time));
+          } else {
+            const item = resolveParameter(name, time);
+            if (item.status !== "missing") found.push(item);
           }
         }
         return found;
       }
 
-      function renderLayerParams(summary, layerKey) {
-        const params = summary.control_params || {};
-        const rows = layerParameterMap[layerKey] || [];
-        if (!rows.length) return "";
-        const body = rows.map(([name, role]) => {
-          const hasValue = Object.prototype.hasOwnProperty.call(params, name);
-          return `<div class="param-row"><code title="${escapeHtml(name)}">${escapeHtml(name)}</code><span title="${escapeHtml(role)}">${hasValue ? escapeHtml(params[name]) : "missing"} · ${escapeHtml(role)}</span></div>`;
-        }).join("");
-        return `<h3>Key params</h3><div class="param-card">${body}</div>`;
+      function parameterSourceMetaText(item) {
+        const timeText = finite(Number(item.time_s)) ? ` @ ${fmt.format(item.time_s)}s` : "";
+        return `${item.source || parameterSourceLabel()}${timeText}`;
       }
 
-      function renderParameterList(names) {
-        const matches = parameterMatches(names);
-        if (!matches.length) return `<div class="mini-list">${statusPill("missing")}</div>`;
-        return `<div class="mini-list">${matches.slice(0, 8).map(([key, value]) => `<code title="${escapeHtml(key)} = ${escapeHtml(value)}">${escapeHtml(key)}=${escapeHtml(value)}</code>`).join("")}${matches.length > 8 ? `<code>+${matches.length - 8}</code>` : ""}</div>`;
+      function renderLayerParams(_summary, layerKey) {
+        const rows = layerParameterMap[layerKey] || [];
+        if (!rows.length) return "";
+        const time = parameterResolveTime();
+        const body = rows.map(([name, role]) => {
+          const item = resolveParameter(name, time);
+          const value = item.status === "missing" ? "missing" : item.value;
+          const meta = parameterSourceMetaText(item);
+          return `<div class="param-row"><code title="${escapeHtml(name)}">${escapeHtml(name)}</code><span title="${escapeHtml(role)} | ${escapeHtml(meta)}">${escapeHtml(value)} · ${escapeHtml(role)} · ${escapeHtml(meta)}</span></div>`;
+        }).join("");
+        return `<h3>Key params</h3><div class="param-card" data-layer-params="${escapeHtml(layerKey)}"><div class="note">Parameter source: ${escapeHtml(parameterSourceLabel())}${state.parameterSourceMode === "dataflash_time" ? ` | time ${fmt.format(time)}s` : ""}</div>${body}</div>`;
+      }
+
+      function updateLayerParamCards() {
+        document.querySelectorAll("[data-layer-params]").forEach((node) => {
+          const layerKey = node.dataset.layerParams;
+          const html = renderLayerParams(inspectorContext?.summary || {}, layerKey);
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = html;
+          const next = wrapper.querySelector("[data-layer-params]");
+          if (next) node.replaceWith(next);
+        });
+      }
+
+      function renderParameterList(names, time = parameterResolveTime()) {
+        const matches = parameterMatches(names, time);
+        if (!matches.length) return `<div class="mini-list">${statusPill("missing")}<code>${escapeHtml(parameterSourceLabel())}</code></div>`;
+        return `<div class="mini-list">${matches.slice(0, 8).map((item) => {
+          const meta = parameterSourceMetaText(item);
+          return `<code title="${escapeHtml(item.name)} = ${escapeHtml(item.value)} | ${escapeHtml(meta)}">${escapeHtml(item.name)}=${escapeHtml(item.value)}</code>`;
+        }).join("")}${matches.length > 8 ? `<code>+${matches.length - 8}</code>` : ""}</div>`;
       }
 
       function renderValueList(values, time) {
@@ -1581,7 +1717,7 @@
         const collapsed = state.inspectorChainCollapsed[key];
         return `<div class="inspector-card ${collapsed ? "chain-collapsed" : ""}">
           <div class="inspector-head"><h3>${escapeHtml(chain.title)}</h3><div class="inspector-actions"><button data-toggle-inspector-chain="${key}">${inspectorChainToggleLabel(index)}</button></div></div>
-          <div class="chain-body">${renderValueList(chain.values, time)}${renderParameterList(chain.params)}</div>
+          <div class="chain-body">${renderValueList(chain.values, time)}${renderParameterList(chain.params, time)}</div>
         </div>`;
       }
 
@@ -2039,6 +2175,11 @@
         }
         const missionStrip = document.querySelector(".mission-status-strip");
         if (missionStrip) missionStrip.outerHTML = missionStatusStripHtml();
+        const waypointPanel = document.querySelector("#track-waypoint-panel");
+        if (waypointPanel) {
+          waypointPanel.outerHTML = trackWaypointPanelHtml();
+          bindWaypointButtons();
+        }
         const missionTask = document.querySelector(".mission-task-card");
         if (missionTask) missionTask.outerHTML = renderMissionTaskCard();
         const sourceSelect = document.querySelector("#mission-source-mode");
@@ -2283,15 +2424,24 @@
           <div class="mode-buttons" id="mode-buttons"></div>
           <div class="chart-actions">
             <button id="zoom-out">Zoom out</button>
+            <label>Params<select id="param-source-mode">${parameterSourceOptionsHtml()}</select></label>
             <button id="font-scale">Font: Normal</button>
             <button id="clear-inspect">Clear inspect</button>
             <button id="clear-pins">Clear readouts</button>
             <button id="clear-time-refs">Clear T refs</button>
           </div>
+          <div class="range-text" id="param-source-text"></div>
         </div>`;
         renderModeButtons();
         updateRangeText("all");
+        updateParameterSourceText();
         document.querySelector("#zoom-out").addEventListener("click", () => focusMode("all"));
+        document.querySelector("#param-source-mode").addEventListener("change", (event) => {
+          state.parameterSourceMode = event.target.value || "auto";
+          updateParameterSourceText();
+          renderInspector();
+          updateLayerParamCards();
+        });
         document.querySelector("#font-scale").addEventListener("click", cycleFontScale);
         applyFontScale();
         document.querySelector("#clear-inspect").addEventListener("click", clearInspect);
@@ -3138,6 +3288,7 @@
         const allPos = projected.filter((point) => point.kind === "pos");
         const wpPoints = projected.filter((point) => point.kind === "wp");
         const markerTime = trackMarkerTime();
+        const currentSeq = currentNavigationSeq(markerTime);
         const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
         const current = (nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row) || posPoints[posPoints.length - 1] || allPos[allPos.length - 1];
         const attitude = nearestRow(config.attitudeRows || [], markerTime)?.row || null;
@@ -3188,6 +3339,18 @@
             ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
             ctx.fill();
           });
+
+          const currentTarget = wpPoints.find((point) => Number(point.row?.index) === currentSeq);
+          if (currentTarget) {
+            const screen = track3dProject(currentTarget, config, plot);
+            ctx.strokeStyle = "#ff4dff";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(screen.x, screen.y, 13, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = "#ff4dff";
+            ctx.fillText(`NAV #${currentTarget.row.index}`, screen.x + 14, screen.y + 14);
+          }
 
           const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
           if (highlighted) {
@@ -3258,6 +3421,7 @@
         const posPoints = filterTrackPoints(projected, pathRange);
         const allPos = projected.filter((point) => point.kind === "pos");
         const markerTime = trackMarkerTime();
+        const currentSeq = currentNavigationSeq(markerTime);
         const markerCandidates = filterTrackPoints(allPos, trackMarkerBounds());
         const markerPoint = nearestRow(markerCandidates.length ? markerCandidates : allPos, markerTime)?.row || null;
         const wpPoints = projected.filter((point) => point.kind === "wp");
@@ -3334,7 +3498,19 @@
             ctx.fill();
           });
         }
+        const currentTarget = state.trackShowWaypoints ? wpPoints.find((point) => Number(point.row?.index) === currentSeq) : null;
         const highlighted = state.trackShowWaypoints ? wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex) : null;
+        if (currentTarget) {
+          const tx = sx(currentTarget.x);
+          const ty = sy(currentTarget.y);
+          ctx.strokeStyle = "#ff4dff";
+          ctx.fillStyle = "#ff4dff";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 13, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillText(`NAV #${currentTarget.row.index}`, tx + 14, ty + 14);
+        }
         if (markerPoint) {
           const mx = sx(markerPoint.x);
           const my = sy(markerPoint.y);
@@ -3443,9 +3619,12 @@
 
       function syncTrackMissionRoute(config) {
         if (config.type !== "track" && config.type !== "track3d") return;
-        const source = selectedMissionSource(trackMarkerTime());
-        const rows = activeMissionWaypointRows(trackMarkerTime());
-        const routeKey = `${source?.id || "summary"}:${rows.length}:${state.highlightedWaypointIndex ?? "none"}`;
+        const time = trackMarkerTime();
+        const source = selectedMissionSource(time);
+        const version = missionVersionAt(source, time);
+        const rows = activeMissionWaypointRows(time);
+        const rowKey = rows.map((row) => `${row.index}:${row.lat}:${row.lon}:${row.alt}`).join(";");
+        const routeKey = `${source?.id || "summary"}:${version?.start_s ?? "static"}:${version?.end_s ?? "end"}:${rowKey}`;
         if (config.routeSourceKey === routeKey) return;
         config.routeSourceKey = routeKey;
         config.waypointRows = rows;
@@ -3462,6 +3641,8 @@
           else drawLineChart(config);
         }
         updateTrackHud();
+        updateParameterSourceText();
+        updateLayerParamCards();
       }
 
       function bindChartEvents(config) {
@@ -3960,13 +4141,7 @@
             "Track / Geometry",
             "当前任务、航迹窗口和 3D 姿态复现。",
             `${missionStatusStripHtml()}${trackControlsHtml()}${chartPanel("track-chart")}${track3dPanel()}`,
-            `<details open><summary>Waypoints</summary><div class="table-scroll">${table(summary.waypoints, [
-              { key: "index", label: "#" },
-              { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
-              { key: "lat", label: "Lat", format: (v) => fmt.format(v) },
-              { key: "lon", label: "Lon", format: (v) => fmt.format(v) },
-              { key: "alt", label: "Alt", format: (v) => fmt.format(v) },
-            ], null)}</div></details><details><summary>Track metadata</summary><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div></details>`,
+            `<details open><summary>Waypoints</summary>${trackWaypointPanelHtml()}</details><details><summary>Track metadata</summary><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div></details>`,
           ),
           layer(
             2,

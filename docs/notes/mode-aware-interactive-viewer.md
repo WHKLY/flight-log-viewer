@@ -477,6 +477,53 @@ Result for this pass:
 - Auto mission-source selection now prefers complete tlog routes, then complete DataFlash onboard CMD, then external waypoints, and only falls back to partial tlog data when no better route source exists.
 - Flight2 validation: `onboard_cmd` produced 2 complete route versions (`17` items then `12` items); `tlog_mission` produced `2460` current-seq events but only `1` located route item, so it is marked `route_complete=false`.
 
+
+## DataFlash CMD waypoint list and BIN params v25 plan
+
+Goal: make onboard accepted mission and logged parameters visible when external `.waypoints` or `.param` files are missing.
+
+Implementation for this pass:
+
+- Change the Track right-side Waypoints table to render the currently selected mission source/version instead of only `summary.waypoints`.
+- Add automatic current-navigation-point highlighting during replay by deriving the active mission seq at `trackMarkerTime()` and drawing a purple ring in both 2D and 3D track views.
+- Keep manual waypoint-list click highlighting as a separate red selection so user inspection and playback current target can coexist.
+- Extract DataFlash `PARM` records from `.BIN` and merge them into `dataset-summary.json` when `.param` is missing or incomplete.
+- Preserve `.param` as the higher-trust source on key conflicts, with BIN params filling gaps.
+
+
+Result for this pass:
+
+- Track right-side Waypoints now renders the active mission source/version instead of only external `summary.waypoints`, so DataFlash accepted CMD routes appear when no `.waypoints` file exists.
+- 2D and 3D track views now draw a magenta current-navigation waypoint ring derived from mission state at `trackMarkerTime()`; red waypoint click highlighting remains separate.
+- Mission route cache keys now include source/version and waypoint coordinates so onboard mission rewrites refresh correctly even when item counts are similar.
+- `extract_dataflash_series.py` now includes DataFlash `PARM` in extracted target counts.
+- `summarize_dataset.py` now merges DataFlash `PARM` values from `.BIN` with `.param` file values, keeping `.param` precedence and using BIN values to fill gaps.
+- Flight2 validation: no `.param` file, but summary now reports `1110` merged parameters from BIN and `500` control parameters; dynamic Waypoints DOM smoke test sees DataFlash CMD route rows.
+
+
+## Parameter source and time-aware PARM v26 plan
+
+Goal: parameter analysis must not depend on whether a `.param` file exists. The user must be able to manually choose the parameter source, and DataFlash `PARM` changes during flight must be available for time-specific formula inspection.
+
+Implementation for this pass:
+
+- Extend `summarize_dataset.py` output from a single merged `control_params` snapshot into explicit parameter sets: `.param` file snapshot, DataFlash latest snapshot, merged snapshot, and DataFlash `PARM` timeline.
+- Keep `.param` precedence only for the merged/default set; expose manual choices so the viewer can ignore that precedence when requested.
+- Add a viewer-level parameter source selector: Auto, merged, `.param`, DataFlash latest, and DataFlash time-aware.
+- For DataFlash time-aware mode, resolve each parameter at the selected inspect/marker time using the latest `PARM` record at or before that time.
+- Show parameter source information in formula/parameter cards so stale, missing, or flight-updated values are distinguishable.
+- Preserve existing formula cards and layer separation; only replace their parameter lookup backend.
+
+
+Result for this pass:
+
+- `summarize_dataset.py` now outputs explicit parameter sets: `merged`, `param_file`, and `dataflash_latest`, plus a `dataflash_param_timeline` with `time_s`, `name`, `value`, and default where present.
+- The legacy `control_params` snapshot remains for compatibility, but viewer parameter lookup now uses a selected parameter source resolver.
+- Viewer toolbar now has a global `Params` selector with Auto/merged, `.param file`, DataFlash latest, and DataFlash time-aware modes.
+- DataFlash time-aware mode resolves each formula parameter as the latest `PARM` record at or before the current Inspector/track marker time.
+- Parameter cards and Inspector formula parameter chips now show source metadata and, for time-aware values, the parameter record time.
+- Flight2 validation: `.param file` option is disabled, DataFlash latest/time-aware are enabled, and DOM smoke confirms layer cards refresh after switching to DataFlash time-aware.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

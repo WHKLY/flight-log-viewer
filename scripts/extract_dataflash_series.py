@@ -39,6 +39,7 @@ TARGET_MESSAGES = {
     "EV",
     "TERR",
     "ORGN",
+    "PARM",
     "ARSP",
     "IMU",
     "IMU2",

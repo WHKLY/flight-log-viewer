@@ -7,7 +7,12 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+
+try:
+    from extract_dataflash_series import extract_dataflash
+except ImportError:  # pragma: no cover - keeps the script usable if copied standalone.
+    extract_dataflash = None
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +97,47 @@ def parse_param_file(path: Path) -> dict[str, str]:
     return params
 
 
+def stringify_param_value(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.9g}"
+    return str(value)
+
+
+def parse_dataflash_params(path: Path | None) -> tuple[dict[str, str], list[dict[str, object]]]:
+    if path is None or extract_dataflash is None:
+        return {}, []
+    try:
+        rows, _metadata = extract_dataflash(path)
+    except (OSError, ValueError):
+        return {}, []
+    params: dict[str, str] = {}
+    timeline: list[dict[str, object]] = []
+    for row in rows.get("PARM", []):
+        name = str(row.get("Name", "")).strip()
+        if not name or "Value" not in row:
+            continue
+        value = stringify_param_value(row["Value"])
+        params[name] = value
+        timeline.append(
+            {
+                "time_s": row.get("time_s"),
+                "name": name,
+                "value": value,
+                "default": stringify_param_value(row["Default"]) if "Default" in row else None,
+            }
+        )
+    timeline.sort(key=lambda item: (float(item["time_s"]) if isinstance(item.get("time_s"), int | float) else -1.0, str(item.get("name", ""))))
+    return params, timeline
+
+
+def is_control_param(name: str) -> bool:
+    return any(name == prefix or name.startswith(prefix) for prefix in CONTROL_PARAM_PREFIXES)
+
+
+def control_subset(params: dict[str, str]) -> dict[str, str]:
+    return {key: params[key] for key in sorted(params) if is_control_param(key)}
+
+
 def parse_waypoints_file(path: Path) -> list[dict[str, object]]:
     waypoints: list[dict[str, object]] = []
     with path.open("r", encoding="utf-8", errors="replace") as handle:
@@ -164,13 +210,14 @@ def main() -> int:
 
     param_path = find_first(files, ".param")
     waypoint_path = find_first(files, ".waypoints")
+    bin_path = find_first(files, ".bin")
 
-    params = parse_param_file(param_path) if param_path else {}
-    control_params = {
-        key: params[key]
-        for key in sorted(params)
-        if any(key == prefix or key.startswith(prefix) for prefix in CONTROL_PARAM_PREFIXES)
-    }
+    file_params = parse_param_file(param_path) if param_path else {}
+    bin_params, bin_param_timeline = parse_dataflash_params(bin_path)
+    params = {**bin_params, **file_params}
+    control_params = control_subset(params)
+    file_control_params = control_subset(file_params)
+    bin_control_params = control_subset(bin_params)
 
     waypoints = parse_waypoints_file(waypoint_path) if waypoint_path else []
 
@@ -180,6 +227,9 @@ def main() -> int:
         "counts": {
             "files": len(file_summaries),
             "parameters": len(params),
+            "file_parameters": len(file_params),
+            "dataflash_parameters": len(bin_params),
+            "dataflash_parameter_records": len(bin_param_timeline),
             "control_parameters": len(control_params),
             "waypoints": len(waypoints),
         },
@@ -191,6 +241,23 @@ def main() -> int:
             "rlogs": [path.name for path in sorted(files) if path.suffix.lower() == ".rlog"],
         },
         "duplicate_groups": duplicate_groups(files),
+        "parameter_sources": {
+            "param_file": param_path.name if param_path else None,
+            "dataflash_bin": bin_path.name if bin_path and bin_params else None,
+            "available": {
+                "merged": bool(params),
+                "param_file": bool(file_params),
+                "dataflash_latest": bool(bin_params),
+                "dataflash_time": bool(bin_param_timeline),
+            },
+            "precedence": ".param values override DataFlash PARM values with the same name only in merged/auto mode",
+        },
+        "parameter_sets": {
+            "merged": {"label": "Merged: .param over DataFlash", "params": params, "control_params": control_params},
+            "param_file": {"label": ".param file", "params": file_params, "control_params": file_control_params},
+            "dataflash_latest": {"label": "DataFlash PARM latest", "params": bin_params, "control_params": bin_control_params},
+        },
+        "dataflash_param_timeline": bin_param_timeline,
         "control_params": control_params,
         "waypoints": waypoints,
     }
