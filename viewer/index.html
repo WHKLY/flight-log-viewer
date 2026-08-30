@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flight Log Viewer</title>
+    <link rel="stylesheet" href="css/base.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="control-rail">
+        <div>
+          <p class="eyebrow">Flight Log Viewer</p>
+          <h1>Data Console</h1>
+          <p class="lede">Schema-first rebuild. Charts and 3D review will attach to this source model.</p>
+        </div>
+        <section class="panel">
+          <h2>Dataset</h2>
+          <div id="dataset-summary" class="stack muted">Loading dataset...</div>
+        </section>
+        <section class="panel">
+          <h2>Source Selection</h2>
+          <label class="field">
+            <span>Mission route</span>
+            <select id="route-source"></select>
+          </label>
+          <label class="field">
+            <span>Current task</span>
+            <select id="current-source"></select>
+          </label>
+          <label class="field">
+            <span>Parameters</span>
+            <select id="parameter-source"></select>
+          </label>
+          <p id="selection-readout" class="note"></p>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Rebuild Baseline</p>
+            <h2>Unified Source Schema</h2>
+          </div>
+          <button id="reload-button" type="button">Reload Data</button>
+        </header>
+
+        <section id="status-grid" class="status-grid"></section>
+
+        <section class="panel wide">
+          <div class="section-head">
+            <h2>Source Registry</h2>
+            <span id="source-count" class="badge">0</span>
+          </div>
+          <div id="source-list" class="card-grid"></div>
+        </section>
+
+        <section class="panel wide">
+          <div class="section-head">
+            <h2>Mission Sources</h2>
+            <span id="mission-count" class="badge">0</span>
+          </div>
+          <div id="mission-list" class="card-grid"></div>
+        </section>
+
+        <section class="two-column">
+          <section class="panel">
+            <h2>Mode Segments</h2>
+            <div id="mode-list" class="scroll-list"></div>
+          </section>
+          <section class="panel">
+            <h2>Parameters</h2>
+            <div id="parameter-summary" class="stack"></div>
+          </section>
+        </section>
+
+        <section class="panel wide">
+          <div class="section-head">
+            <h2>Signal Catalog</h2>
+            <span id="signal-count" class="badge">0</span>
+          </div>
+          <div id="signal-list" class="scroll-list compact"></div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
+
