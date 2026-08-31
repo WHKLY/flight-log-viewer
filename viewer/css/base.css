@@ -416,6 +416,21 @@ code {
   display: none;
 }
 
+.subpanel {
+  min-width: 0;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--panel-radius);
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.source-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--workspace-gap);
+  min-width: 0;
+}
+
 .wide {
   min-width: 0;
 }

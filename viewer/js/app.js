@@ -100,10 +100,10 @@ function handleAction(action, target) {
       renderApp(state);
       break;
     case "show-track":
-      openPanel("mission-sources");
+      openPanel("track-mission");
       break;
     case "open-inspector":
-      openPanel("overview");
+      openPanel("external-sources");
       break;
     case "clear-inspect":
       state.time.inspect = null;

@@ -350,8 +350,47 @@ function renderSignalsPanel(state) {
   `;
 }
 
+function renderExternalSourcesPanel(state) {
+  return `
+    ${renderOverviewPanel(state)}
+    <section class="subpanel">
+      ${renderSourcesPanel(state)}
+    </section>
+    <section class="subpanel">
+      ${renderSignalsPanel(state)}
+    </section>
+  `;
+}
+
+function renderTrackMissionPanel(state) {
+  return `
+    <div class="source-choice-grid">
+      ${renderSelect("Mission route source", "route-source", missionSourceOptions(state.data), state.selection.routeSource)}
+      ${renderSelect("Current task source", "current-source", currentTaskSourceOptions(state.data), state.selection.currentSource)}
+      <div class="sidebar-readout">
+        <span>Selection</span>
+        <strong>${escapeHtml(selectionReadout(state.selection))}</strong>
+      </div>
+    </div>
+    <section class="subpanel">
+      ${renderMissionPanel(state)}
+    </section>
+    <section class="subpanel">
+      <div class="section-head">
+        <h3>Flight Mode Segments</h3>
+        <span class="badge">${escapeHtml(state.data?.modes?.segments?.length || 0)}</span>
+      </div>
+      ${renderModesPanel(state)}
+    </section>
+  `;
+}
+
 function renderPanelBody(state, panel) {
   switch (panel.kind) {
+    case "external-sources":
+      return renderExternalSourcesPanel(state);
+    case "track-mission":
+      return renderTrackMissionPanel(state);
     case "overview":
       return renderOverviewPanel(state);
     case "legacy-source-registry":

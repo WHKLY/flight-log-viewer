@@ -41,14 +41,15 @@ export const DEFAULT_CONFIG = {
   },
   panels: {
     defaultOpen: [],
-    importantOpen: ["overview", "mission-sources"],
+    importantOpen: ["external-sources", "track-mission"],
+    pages: [
+      { id: "log-viewer", label: "Log Viewer", description: "Flight log source, mission and control analysis workspace.", default: true },
+      { id: "parameters", label: "Parameters", description: "Future parameter search, comparison and timeline workspace.", planned: true },
+      { id: "source-control", label: "Source Control", description: "Future source-code formula and control-chain provenance workspace.", planned: true },
+    ],
     panels: [
-      { id: "overview", label: "Overview Status", description: "Dataset, firmware, profile, source and warning summary.", kind: "overview", priority: 10, defaultCollapsed: true, tags: ["schema", "status"] },
-      { id: "source-registry", label: "Source Registry", description: "All available and derived data sources.", kind: "legacy-source-registry", priority: 50, defaultCollapsed: true, tags: ["sources"] },
-      { id: "mission-sources", label: "Mission Sources", description: "Route and current-task source candidates.", kind: "legacy-mission-sources", priority: 40, defaultCollapsed: true, tags: ["mission", "manual-first"] },
-      { id: "mode-segments", label: "Mode Segments", description: "Flight mode timeline segments.", kind: "legacy-mode-segments", priority: 60, defaultCollapsed: true, tags: ["modes"] },
-      { id: "parameters", label: "Parameters", description: "Parameter source summary and sample values.", kind: "legacy-parameters", priority: 70, defaultCollapsed: true, tags: ["params"] },
-      { id: "signal-catalog", label: "Signal Catalog", description: "Decoded signal catalog and numeric field list.", kind: "legacy-signal-catalog", priority: 80, defaultCollapsed: true, tags: ["signals"] },
+      { id: "external-sources", label: "External Sources", description: "Raw files, firmware/profile compatibility, decoded source registry, warnings and signal catalog.", kind: "external-sources", priority: 10, defaultCollapsed: true, page: "log-viewer", tags: ["files", "profile", "signals"] },
+      { id: "track-mission", label: "Track / Mission", description: "Route source candidates, current mission task source candidates and flight mode timeline.", kind: "track-mission", priority: 20, defaultCollapsed: true, page: "log-viewer", tags: ["track", "mission", "modes"] },
     ],
   },
   leftSidebar: {
