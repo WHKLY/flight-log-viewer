@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "id": "ardupilot-plane-generic",
+  "label": "ArduPlane generic 4.x",
+  "family": "ArduPilot",
+  "vehicle": "Plane",
+  "version_match": {
+    "vehicle": "Plane",
+    "prefixes": []
+  },
+  "mode_map": {
+    "0": "MANUAL",
+    "1": "CIRCLE",
+    "2": "STABILIZE",
+    "3": "TRAINING",
+    "4": "ACRO",
+    "5": "FBWA",
+    "6": "FBWB",
+    "7": "CRUISE",
+    "8": "AUTOTUNE",
+    "10": "AUTO",
+    "11": "RTL",
+    "12": "LOITER",
+    "13": "TAKEOFF",
+    "14": "AVOID_ADSB",
+    "15": "GUIDED",
+    "16": "INITIALISING",
+    "17": "QSTABILIZE",
+    "18": "QHOVER",
+    "19": "QLOITER",
+    "20": "QLAND",
+    "21": "QRTL",
+    "22": "QAUTOTUNE",
+    "23": "QACRO",
+    "24": "THERMAL",
+    "25": "LOITER_ALT_QLAND",
+    "26": "AUTOLAND"
+  },
+  "message_aliases": {
+    "current_mission_command": ["CMD"],
+    "mode": ["MODE"],
+    "attitude": ["ATT", "AHR2", "XKQ"],
+    "position": ["POS", "GPS"],
+    "navigation": ["NTUN", "CTUN"],
+    "tecs": ["TECS", "TEC2"],
+    "airspeed": ["ARSP"],
+    "output": ["RCOU"],
+    "input": ["RCIN"]
+  },
+  "signal_roles": {
+    "track.lat": ["POS.Lat", "GPS.Lat"],
+    "track.lon": ["POS.Lng", "GPS.Lng"],
+    "track.alt": ["POS.Alt", "GPS.Alt"],
+    "attitude.roll": ["ATT.Roll", "AHR2.Roll", "XKQ.Roll"],
+    "attitude.pitch": ["ATT.Pitch", "AHR2.Pitch", "XKQ.Pitch"],
+    "attitude.yaw": ["ATT.Yaw", "AHR2.Yaw", "XKQ.Yaw"],
+    "speed.ground": ["GPS.Spd", "POS.Spd"],
+    "speed.air": ["ARSP.Airspeed", "ARSP.AirSpeed"],
+    "tecs.height_demand": ["TECS.hdem", "TECS.HDem"],
+    "tecs.speed_demand": ["TECS.spdem", "TECS.SPDem"]
+  },
+  "mission": {
+    "route_sources": ["dataflash_cmd", "external_waypoints", "tlog_mission"],
+    "current_task_sources": ["dataflash_cmd", "tlog_mission"],
+    "dataflash_route_message": "CMD",
+    "manual_selection_required": true,
+    "auto_selection_is_suggestion_only": true
+  },
+  "parameters": {
+    "aliases": {},
+    "deprecated": {},
+    "control_prefixes": [
+      "NAVL1_",
+      "TECS_",
+      "RLL2SRV_",
+      "RLL_RATE_",
+      "PTCH2SRV_",
+      "PTCH_RATE_",
+      "YAW2SRV_",
+      "YAW_RATE_"
+    ]
+  },
+  "control": {
+    "formula_profile": "ardupilot-plane-generic",
+    "explanation_source": "Plane 4.x generic behavior; use exact profile for formula inspection",
+    "confidence": "conceptual"
+  },
+  "capabilities": {
+    "mode_mapping": true,
+    "mission_cmd_route": true,
+    "tlog_mission_route": true,
+    "dataflash_parameters": true,
+    "control_formula_explanation": false
+  }
+}

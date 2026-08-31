@@ -46,11 +46,12 @@ function renderStatus(state) {
   const dataset = state.data.dataset;
   const firmware = dataset.firmware || {};
   const profile = dataset.compatibility_profile || {};
+  const profileSelection = profile.selection || {};
   const counts = dataset.counts || {};
   const signals = signalSummary(state.data);
   $("#status-grid").innerHTML = [
     renderMetric("Firmware", firmware.version ? `${firmware.vehicle} ${firmware.version}` : "unknown", firmware.confidence === "high" ? "good" : "warn"),
-    renderMetric("Profile", profile.id || "missing", profile.confidence === "source-matched" ? "good" : "warn"),
+    renderMetric("Profile", profile.id || "missing", profileSelection.confidence === "source-matched" || profileSelection.confidence === "manual" ? "good" : "warn"),
     renderMetric("DataFlash records", counts.dataflash_records ?? 0),
     renderMetric("Signals", `${signals.numeric} numeric / ${signals.total} total`),
   ].join("");

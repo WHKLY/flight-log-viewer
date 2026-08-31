@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "id": "ardupilot-generic",
+  "label": "ArduPilot generic",
+  "family": "ArduPilot",
+  "vehicle": "unknown",
+  "version_match": {
+    "vehicle": "unknown",
+    "prefixes": []
+  },
+  "mode_map": {},
+  "message_aliases": {},
+  "signal_roles": {},
+  "mission": {
+    "route_sources": ["external_waypoints", "dataflash_cmd", "tlog_mission"],
+    "current_task_sources": ["dataflash_cmd", "tlog_mission"],
+    "manual_selection_required": true,
+    "auto_selection_is_suggestion_only": true
+  },
+  "parameters": {
+    "aliases": {},
+    "deprecated": {},
+    "control_prefixes": []
+  },
+  "control": {
+    "formula_profile": "generic",
+    "explanation_source": "generic",
+    "confidence": "conceptual"
+  },
+  "capabilities": {
+    "mode_mapping": false,
+    "mission_cmd_route": true,
+    "tlog_mission_route": true,
+    "dataflash_parameters": true,
+    "control_formula_explanation": false
+  }
+}

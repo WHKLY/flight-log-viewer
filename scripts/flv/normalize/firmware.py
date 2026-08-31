@@ -1,4 +1,4 @@
-"""Firmware detection and compatibility profile selection."""
+"""Firmware detection from decoded DataFlash messages."""
 
 from __future__ import annotations
 
@@ -38,28 +38,3 @@ def detect_firmware(msg_rows: list[dict[str, Any]]) -> dict[str, Any]:
         "detected_from": [],
         "confidence": "missing",
     }
-
-
-def compatibility_profile(firmware: dict[str, Any]) -> dict[str, Any]:
-    vehicle = firmware.get("vehicle") or "unknown"
-    version = str(firmware.get("version") or "")
-    if vehicle == "Plane" and version.startswith("4.4."):
-        profile_id = "ardupilot-plane-4.4"
-        confidence = "source-matched"
-    elif vehicle == "Plane":
-        profile_id = "ardupilot-plane-generic"
-        confidence = "generic"
-    else:
-        profile_id = "ardupilot-generic"
-        confidence = "generic"
-    return {
-        "id": profile_id,
-        "family": firmware.get("family"),
-        "vehicle": vehicle,
-        "detected_version": firmware.get("version"),
-        "mode_map": "plane_default_4.x" if vehicle == "Plane" else "generic",
-        "parameter_metadata": "raw_values_first",
-        "control_formulas": "profile_required",
-        "confidence": confidence,
-    }
-

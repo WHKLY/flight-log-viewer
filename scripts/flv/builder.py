@@ -7,7 +7,7 @@ from typing import Any
 
 from flv.common import SERIES_GROUPS, TARGET_MESSAGES, write_json
 from flv.io.discover import discover_dataset
-from flv.normalize.firmware import compatibility_profile, detect_firmware
+from flv.normalize.firmware import detect_firmware
 from flv.normalize.mission import build_mission_domain
 from flv.normalize.modes import build_mode_domain, time_range_from_rows
 from flv.normalize.parameters import build_parameter_domain
@@ -15,6 +15,7 @@ from flv.normalize.signals import build_signal_catalog
 from flv.parsers.dataflash import extract_dataflash
 from flv.parsers.param_file import parse_param_file
 from flv.parsers.qgc_waypoints import parse_waypoints_file
+from flv.profiles import available_profiles, profile_summary, select_profile
 
 
 def source_id(kind: str, path: Path | None) -> str | None:
@@ -85,16 +86,16 @@ def selected_files_payload(discovery: dict[str, Any], selected: dict[str, Path |
     }
 
 
-def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
+def build_dataset(dataset: Path, output: Path, profile_override: str | None = None) -> dict[str, Any]:
     discovery = discover_dataset(dataset)
     selected = discovery["selected"]
     output = output.expanduser().resolve()
 
     rows, dataflash_meta = extract_dataflash(selected["bin"], TARGET_MESSAGES)
     firmware = detect_firmware(rows.get("MSG", []))
-    profile = compatibility_profile(firmware)
+    profile = select_profile(firmware, profile_override)
     time_range = time_range_from_rows(rows)
-    mode_domain = build_mode_domain(rows.get("MODE", []), time_range, str(firmware.get("vehicle") or "unknown"))
+    mode_domain = build_mode_domain(rows.get("MODE", []), time_range, profile)
     file_params = parse_param_file(selected["param"])
     waypoints = parse_waypoints_file(selected["waypoints"])
     registry = source_registry(discovery, selected)
@@ -108,7 +109,8 @@ def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
     }
     parameter_domain = build_parameter_domain(file_params, rows.get("PARM", []), source_ids)
     mission_domain = build_mission_domain(waypoints, rows.get("CMD", []), selected["tlog"], source_ids)
-    signals = build_signal_catalog(rows, dataflash_meta["target_formats"], source_ids["dataflash"])
+    mission_domain["profile_strategy"] = profile.get("mission", {})
+    signals = build_signal_catalog(rows, dataflash_meta["target_formats"], source_ids["dataflash"], profile)
 
     output.mkdir(parents=True, exist_ok=True)
     (output / "domains").mkdir(parents=True, exist_ok=True)
@@ -129,8 +131,17 @@ def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
     write_json(output / "domains" / "modes.json", {"schema_version": 1, **mode_domain})
     write_json(output / "domains" / "mission.json", {"schema_version": 1, **mission_domain})
     write_json(output / "domains" / "parameters.json", {"schema_version": 1, **parameter_domain})
-    write_json(output / "domains" / "track.json", {"schema_version": 1, "source_id": source_ids["dataflash"], "position_messages": ["POS", "GPS"], "attitude_messages": ["ATT", "AHR2", "XKQ"]})
-    write_json(output / "domains" / "control.json", {"schema_version": 1, "source": "profile_required", "layers": ["mission", "navigation", "l1", "attitude_rate", "tecs", "output", "motion"]})
+    write_json(
+        output / "domains" / "track.json",
+        {
+            "schema_version": 1,
+            "source_id": source_ids["dataflash"],
+            "position_messages": profile.get("message_aliases", {}).get("position", ["POS", "GPS"]),
+            "attitude_messages": profile.get("message_aliases", {}).get("attitude", ["ATT", "AHR2", "XKQ"]),
+            "signal_roles": {key: value for key, value in (profile.get("signal_roles") or {}).items() if key.startswith(("track.", "attitude.", "speed.", "airspeed."))},
+        },
+    )
+    write_json(output / "domains" / "control.json", {"schema_version": 1, "source": profile.get("id"), **(profile.get("control") or {})})
 
     counts = {
         "files": len(discovery["files"]),
@@ -140,6 +151,7 @@ def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
         "mission_sources": [source["id"] for source in mission_domain["sources"]],
         "signals": signals["counts"]["signals"],
         "numeric_signals": signals["counts"]["numeric_signals"],
+        "semantic_roles": signals["counts"]["semantic_roles"],
     }
     dataset_payload = {
         "schema_version": 1,
@@ -153,7 +165,8 @@ def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
         "selected_files": selected_files_payload(discovery, selected),
         "duplicate_groups": discovery["duplicates"],
         "firmware": firmware,
-        "compatibility_profile": profile,
+        "compatibility_profile": profile_summary(profile),
+        "available_profiles": available_profiles(),
         "dataflash": dataflash_meta,
         "counts": counts,
         "outputs": {
@@ -170,13 +183,15 @@ def build_dataset(dataset: Path, output: Path) -> dict[str, Any]:
 
 def compatibility_warnings(firmware: dict[str, Any], profile: dict[str, Any], selected: dict[str, Path | None]) -> list[dict[str, str]]:
     warnings: list[dict[str, str]] = []
+    profile_selection = profile.get("selection") or {}
     if firmware.get("confidence") != "high":
         warnings.append({"code": "firmware_unknown", "severity": "info", "message": "Firmware was not detected from DataFlash MSG records."})
-    if profile.get("confidence") != "source-matched":
+    if profile_selection.get("confidence") not in {"source-matched", "manual"}:
         warnings.append({"code": "generic_profile", "severity": "info", "message": "Using a generic compatibility profile; formulas must be treated as conceptual."})
+    if profile_selection.get("mode") == "manual_override":
+        warnings.append({"code": "manual_profile_override", "severity": "info", "message": f"Using manually selected profile {profile.get('id')}."})
     if selected.get("tlog") is None:
         warnings.append({"code": "tlog_missing", "severity": "info", "message": "No tlog selected; tlog mission route/current events are unavailable."})
     if selected.get("param") is None:
         warnings.append({"code": "param_file_missing", "severity": "info", "message": "No .param file selected; parameters are sourced from DataFlash PARM when available."})
     return warnings
-
