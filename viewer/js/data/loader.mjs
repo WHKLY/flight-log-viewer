@@ -9,6 +9,7 @@ const DATA_FILES = {
   currentTasks: "domains/current_tasks.json",
   parameters: "domains/parameters.json",
   semanticSignals: "domains/semantic_signals.json",
+  trackSeries: "series/track.json",
 };
 
 export async function loadJson(dataRoot, path) {
@@ -19,9 +20,23 @@ export async function loadJson(dataRoot, path) {
   return response.json();
 }
 
+async function loadOptionalJson(dataRoot, path, fallback) {
+  try {
+    return await loadJson(dataRoot, path);
+  } catch (error) {
+    if (error.message.includes(": 404")) return fallback;
+    throw error;
+  }
+}
+
 export async function loadViewerData(dataRoot = DEFAULT_DATA_ROOT) {
   const entries = await Promise.all(
-    Object.entries(DATA_FILES).map(async ([key, path]) => [key, await loadJson(dataRoot, path)]),
+    Object.entries(DATA_FILES).map(async ([key, path]) => {
+      if (key === "trackSeries") {
+        return [key, await loadOptionalJson(dataRoot, path, { messages: {} })];
+      }
+      return [key, await loadJson(dataRoot, path)];
+    }),
   );
   return normalizeViewerData(Object.fromEntries(entries));
 }
@@ -36,6 +51,7 @@ export function normalizeViewerData(data) {
     currentTasks: data.currentTasks || { sources: [], counts: {} },
     parameters: data.parameters || { selection_modes: [], available: {}, sets: {}, timeline: [] },
     semanticSignals: data.semanticSignals || { roles: {}, counts: {} },
+    trackSeries: data.trackSeries || { messages: {} },
   };
 }
 

@@ -31,7 +31,7 @@
   --ui-success-soft: rgba(53, 201, 143, 0.16);
   --ui-font-family: Atkinson Hyperlegible, Noto Sans SC, sans-serif;
   --ui-mono-family: JetBrains Mono, ui-monospace, monospace;
-  --ui-font-scale: 1;
+  --ui-font-scale: 0.82;
   --sidebar-width: 320px;
   --sidebar-min-width: 240px;
   --sidebar-max-width: 380px;
@@ -537,17 +537,110 @@ code {
 }
 
 .viewer-placeholder {
-  min-height: 20rem;
+  min-height: 34rem;
   place-content: center;
   border-style: dashed;
   text-align: center;
 }
 
 .hud-placeholder {
-  min-height: 20rem;
+  min-height: 34rem;
   place-content: center;
   border-color: var(--ui-primary-base);
   text-align: center;
+}
+
+.track-plot {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.track-plot svg {
+  display: block;
+  width: 100%;
+  min-height: 34rem;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--panel-radius);
+  background: var(--ui-surface-card);
+  touch-action: none;
+}
+
+.track-plot figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: var(--ui-text-muted);
+  font-size: 0.8rem;
+}
+
+.track-plot-bg {
+  fill: rgba(2, 10, 16, 0.72);
+}
+
+.track-grid-line {
+  fill: none;
+  stroke: var(--ui-border-subtle);
+  stroke-width: 1;
+}
+
+.actual-track-line {
+  fill: none;
+  stroke: var(--ui-primary-strong);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3.2;
+}
+
+.route-line {
+  fill: none;
+  stroke: var(--ui-dynamic-base);
+  stroke-dasharray: 10 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.3;
+}
+
+.waypoint-marker circle {
+  fill: var(--ui-surface-panel-strong);
+  stroke: var(--ui-dynamic-strong);
+  stroke-width: 2.2;
+}
+
+.waypoint-marker text,
+.axis-indicator text {
+  fill: var(--ui-text-strong);
+  font-family: var(--ui-mono-family);
+  font-size: 22px;
+  paint-order: stroke;
+  stroke: rgba(2, 10, 16, 0.85);
+  stroke-width: 4;
+}
+
+.waypoint-marker.active circle {
+  fill: var(--ui-dynamic-base);
+  stroke: var(--ui-dynamic-strong);
+  stroke-width: 4;
+}
+
+.aircraft-marker circle {
+  fill: rgba(242, 170, 63, 0.2);
+  stroke: var(--ui-dynamic-strong);
+  stroke-width: 3;
+}
+
+.aircraft-marker path {
+  fill: var(--ui-dynamic-strong);
+  stroke: rgba(2, 10, 16, 0.7);
+  stroke-width: 2;
+}
+
+.axis-indicator path {
+  fill: none;
+  stroke: var(--ui-text-strong);
+  stroke-linecap: round;
+  stroke-width: 3;
 }
 
 .timeline-control {

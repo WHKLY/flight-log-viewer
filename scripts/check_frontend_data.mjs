@@ -21,12 +21,14 @@ const data = normalizeViewerData({
   currentTasks: await readJson("domains/current_tasks.json"),
   parameters: await readJson("domains/parameters.json"),
   semanticSignals: await readJson("domains/semantic_signals.json"),
+  trackSeries: await readJson("series/track.json"),
 });
 
 const selection = buildInitialSelection(data);
 const mission = missionSummary(data, defaultMissionSourceId(data), data.dataset?.dataset?.time_range?.end_s);
 const navPeriod = resolveParameter(data, "NAVL1_PERIOD", selection.parameterSource, data.dataset?.dataset?.time_range?.end_s);
 const signals = signalSummary(data);
+const trackPoints = data.trackSeries?.messages?.POS || [];
 
 const checks = [
   ["sources", sourceRegistryList(data).length > 0],
@@ -38,6 +40,7 @@ const checks = [
   ["attitude.roll role", Boolean(semanticRole(data, "attitude.roll"))],
   ["attitude.roll preferred signal", Boolean(preferredSignalForRole(data, "attitude.roll"))],
   ["signals", signals.total > 0 && signals.numeric > 0],
+  ["track POS", trackPoints.length > 0],
 ];
 
 const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);
@@ -46,4 +49,4 @@ if (failed.length) {
   process.exit(1);
 }
 
-console.log(`frontend data smoke ok: ${signals.numeric}/${signals.total} numeric signals, route=${selection.routeSource}, semantic=${signals.availableSemanticRoles}/${signals.semanticRoles}`);
+console.log(`frontend data smoke ok: ${signals.numeric}/${signals.total} numeric signals, route=${selection.routeSource}, track=${trackPoints.length}, semantic=${signals.availableSemanticRoles}/${signals.semanticRoles}`);

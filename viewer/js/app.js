@@ -11,6 +11,7 @@ import {
   resetUiLayout,
   setFontScale,
   setPanelCollapsed,
+  setPlotTimeref,
   setTheme,
   setTrackHighlightedTask,
   setTrackMarkerTime,
@@ -166,6 +167,10 @@ function handleAction(action, target) {
       break;
     case "select-task":
       selectTask(target);
+      renderApp(state);
+      break;
+    case "send-plot-timeref":
+      setPlotTimeref(state, state.track.markerTime);
       renderApp(state);
       break;
     case "track-play":

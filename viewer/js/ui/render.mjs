@@ -9,6 +9,8 @@ import { parameterModes, parameterSample, selectedParameterSet } from "../data/p
 import { missionSourceById, missionSources, selectionReadout, sourceRegistryList } from "../data/sources.mjs";
 import { signalList, signalSummary } from "../data/signals.mjs";
 
+const MODE_COLORS = ["#36b8d4", "#35c98f", "#f2aa3f", "#56a8ff", "#b86dff", "#f07d35", "#65d9ef", "#8fa8bc"];
+
 function $(selector) {
   return document.querySelector(selector);
 }
@@ -30,6 +32,12 @@ function fmt(value, digits = 2) {
 
 function finite(value) {
   return Number.isFinite(Number(value));
+}
+
+function validLatLon(item) {
+  return finite(item?.Lat ?? item?.lat) && finite(item?.Lng ?? item?.lon)
+    && Math.abs(Number(item.Lat ?? item.lat)) > 0.000001
+    && Math.abs(Number(item.Lng ?? item.lon)) > 0.000001;
 }
 
 function optionHtml(options, selected) {
@@ -118,8 +126,8 @@ function taskLabel(task) {
 }
 
 function taskLocation(task) {
-  if (!task || !finite(task.lat) || !finite(task.lon)) return "no position";
-  return `${fmt(task.lat, 7)}, ${fmt(task.lon, 7)} alt ${fmt(task.alt, 1)}m`;
+  if (!task || !validLatLon(task)) return "no position";
+  return `${fmt(task.lat ?? task.Lat, 7)}, ${fmt(task.lon ?? task.Lng, 7)} alt ${fmt(task.alt ?? task.Alt, 1)}m`;
 }
 
 function qualityTags(context) {
@@ -130,6 +138,155 @@ function qualityTags(context) {
   if (!context.currentTask) tags.push("NO CURRENT TASK");
   if (!context.routeItems.length) tags.push("NO ROUTE");
   return tags;
+}
+
+function modeColor(name) {
+  let hash = 0;
+  for (const char of String(name || "")) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  return MODE_COLORS[Math.abs(hash) % MODE_COLORS.length];
+}
+
+function trackMessages(state) {
+  return state.data?.trackSeries?.messages?.POS || [];
+}
+
+function scopedTrackPoints(state) {
+  const points = trackMessages(state).filter(validLatLon);
+  if (state.track.pathScope !== "window") return points;
+  const start = Number(state.track.window.start);
+  const end = Number(state.track.window.end);
+  return points.filter((point) => !finite(point.time_s) || (Number(point.time_s) >= start && Number(point.time_s) <= end));
+}
+
+function decimate(points, limit = 1800) {
+  if (points.length <= limit) return points;
+  const step = Math.ceil(points.length / limit);
+  return points.filter((_, index) => index % step === 0 || index === points.length - 1);
+}
+
+function nearestTrackPoint(points, time) {
+  if (!points.length) return null;
+  if (!finite(time)) return points[points.length - 1];
+  let best = points[0];
+  let bestDelta = Math.abs(Number(points[0].time_s) - Number(time));
+  for (const point of points) {
+    const delta = Math.abs(Number(point.time_s) - Number(time));
+    if (delta < bestDelta) {
+      best = point;
+      bestDelta = delta;
+    }
+  }
+  return best;
+}
+
+function buildPlotProjection(trackPoints, routeItems) {
+  const rawPoints = [
+    ...trackPoints.map((point) => ({ lat: Number(point.Lat), lon: Number(point.Lng), kind: "track", source: point })),
+    ...routeItems.filter(validLatLon).map((item) => ({ lat: Number(item.lat), lon: Number(item.lon), kind: "route", source: item })),
+  ];
+  if (!rawPoints.length) return null;
+
+  const width = 1000;
+  const height = 680;
+  const pad = 54;
+  const lat0 = rawPoints.reduce((sum, point) => sum + point.lat, 0) / rawPoints.length;
+  const lon0 = rawPoints.reduce((sum, point) => sum + point.lon, 0) / rawPoints.length;
+  const cosLat = Math.cos((lat0 * Math.PI) / 180);
+  const projected = rawPoints.map((point) => ({
+    ...point,
+    mx: (point.lon - lon0) * 111320 * cosLat,
+    my: (point.lat - lat0) * 111320,
+  }));
+  const minX = Math.min(...projected.map((point) => point.mx));
+  const maxX = Math.max(...projected.map((point) => point.mx));
+  const minY = Math.min(...projected.map((point) => point.my));
+  const maxY = Math.max(...projected.map((point) => point.my));
+  const spanX = Math.max(maxX - minX, 1);
+  const spanY = Math.max(maxY - minY, 1);
+  const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  function projectPoint(item) {
+    const lat = Number(item.Lat ?? item.lat);
+    const lon = Number(item.Lng ?? item.lon);
+    const mx = (lon - lon0) * 111320 * cosLat;
+    const my = (lat - lat0) * 111320;
+    return {
+      x: width / 2 + (mx - centerX) * scale,
+      y: height / 2 - (my - centerY) * scale,
+    };
+  }
+
+  return { width, height, projectPoint, spanX, spanY };
+}
+
+function svgPath(points, projectPoint) {
+  return points.map((point, index) => {
+    const { x, y } = projectPoint(point);
+    return `${index === 0 ? "M" : "L"}${fmt(x, 1)} ${fmt(y, 1)}`;
+  }).join(" ");
+}
+
+function renderTrack2dPlot(state, context) {
+  const visibleTrack = state.track.showTrack ? decimate(scopedTrackPoints(state)) : [];
+  const routeItems = state.track.showWaypoints ? context.routeItems.filter(validLatLon) : [];
+  const projection = buildPlotProjection(visibleTrack, routeItems);
+  if (!projection) {
+    return `
+      <div class="viewer-placeholder">
+        <strong>No 2D Track Data</strong>
+        <span>Neither POS track points nor waypoint coordinates are available for the current source.</span>
+      </div>
+    `;
+  }
+  const marker = nearestTrackPoint(trackMessages(state).filter(validLatLon), context.time);
+  const markerPoint = marker ? projection.projectPoint(marker) : null;
+  const routePath = routeItems.length > 1 ? svgPath(routeItems, projection.projectPoint) : "";
+  const trackPath = visibleTrack.length > 1 ? svgPath(visibleTrack, projection.projectPoint) : "";
+  const currentSeq = context.currentTask?.seq;
+  const highlighted = state.track.highlightedTask;
+
+  return `
+    <figure class="track-plot">
+      <svg viewBox="0 0 ${projection.width} ${projection.height}" role="img" aria-label="2D flight track plot">
+        <defs>
+          <pattern id="track-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+            <path d="M 50 0 L 0 0 0 50" class="track-grid-line"></path>
+          </pattern>
+        </defs>
+        <rect width="${projection.width}" height="${projection.height}" class="track-plot-bg"></rect>
+        <rect width="${projection.width}" height="${projection.height}" fill="url(#track-grid)" opacity="0.55"></rect>
+        <g class="axis-indicator">
+          <path d="M 72 600 L 72 540 M 72 600 L 132 600"></path>
+          <text x="64" y="532">N</text>
+          <text x="138" y="606">E</text>
+        </g>
+        ${routePath ? `<path d="${routePath}" class="route-line"></path>` : ""}
+        ${trackPath ? `<path d="${trackPath}" class="actual-track-line"></path>` : ""}
+        ${routeItems.map((item) => {
+          const p = projection.projectPoint(item);
+          const active = item.seq === currentSeq || (highlighted?.sourceId === item.source_id && Number(highlighted?.seq) === Number(item.seq));
+          return `
+            <g class="waypoint-marker ${active ? "active" : ""}" data-seq="${escapeHtml(item.seq)}">
+              <circle cx="${fmt(p.x, 1)}" cy="${fmt(p.y, 1)}" r="${active ? 9 : 6}"></circle>
+              <text x="${fmt(p.x + 10, 1)}" y="${fmt(p.y - 8, 1)}">#${escapeHtml(item.seq)}</text>
+            </g>
+          `;
+        }).join("")}
+        ${markerPoint ? `
+          <g class="aircraft-marker">
+            <circle cx="${fmt(markerPoint.x, 1)}" cy="${fmt(markerPoint.y, 1)}" r="11"></circle>
+            <path d="M ${fmt(markerPoint.x, 1)} ${fmt(markerPoint.y - 18, 1)} L ${fmt(markerPoint.x - 8, 1)} ${fmt(markerPoint.y + 8, 1)} L ${fmt(markerPoint.x + 8, 1)} ${fmt(markerPoint.y + 8, 1)} Z"></path>
+          </g>
+        ` : ""}
+      </svg>
+      <figcaption>
+        <span>Track points: ${escapeHtml(visibleTrack.length)} / route points: ${escapeHtml(routeItems.length)}</span>
+        <span>Equal metric scale. Span ${fmt(projection.spanX, 0)}m E/W x ${fmt(projection.spanY, 0)}m N/S.</span>
+      </figcaption>
+    </figure>
+  `;
 }
 
 export function setDatasetMessage(message) {
@@ -270,6 +427,7 @@ function renderOverviewPanel(state) {
     ["Route", state.selection.routeSource || "missing"],
     ["Current task", state.selection.currentSource || "missing"],
     ["Parameters", state.selection.parameterSource || "missing"],
+    ["Plot timeref", state.plot.timeref === null ? "none" : `${fmt(state.plot.timeref)}s`],
   ];
 
   return `
@@ -413,12 +571,13 @@ function renderExternalSourcesPanel(state) {
   `;
 }
 
-function renderTrackSummary(context) {
+function renderTrackSummary(state, context) {
   return `
     <div class="track-summary-grid">
       ${renderMetric("Selected Time", `${fmt(context.time)}s`, "good")}
       ${renderMetric("Flight Mode", context.currentMode?.name || "missing", context.currentMode?.name === "AUTO" ? "good" : "warn")}
       ${renderMetric("Current Task", taskLabel(context.currentTask), context.currentTask ? "good" : "warn")}
+      ${renderMetric("Plot Timeref", state.plot.timeref === null ? "none" : `${fmt(state.plot.timeref)}s`)}
       ${renderMetric("Route Items", context.routeItems.length)}
     </div>
     <div class="tag-list track-quality-tags">
@@ -457,6 +616,7 @@ function renderTrackControls(state) {
       ${renderButton("toggle-track-option", state.track.showWaypoints ? "Hide Waypoints" : "Show Waypoints", 'data-track-option="showWaypoints"')}
       ${renderButton("toggle-track-option", state.track.showHud ? "Hide HUD" : "Show HUD", 'data-track-option="showHud"')}
       ${renderButton("toggle-track-option", state.track.showTargets ? "Hide Targets" : "Show Targets", 'data-track-option="showTargets"')}
+      ${renderButton("send-plot-timeref", "Send Timeref")}
     </div>
   `;
 }
@@ -482,6 +642,7 @@ function renderTaskList(state, context) {
 }
 
 function renderTrackViewer(state, context) {
+  const is3d = state.track.displayMode === "3d";
   return `
     <div class="track-viewer track-viewer-${escapeHtml(state.track.displayMode)}">
       <section class="viewer-pane viewer-pane-primary">
@@ -496,11 +657,13 @@ function renderTrackViewer(state, context) {
             ${renderButton("track-fit-route", "Fit Route")}
           </div>
         </div>
-        <div class="viewer-placeholder">
-          <strong>${state.track.displayMode === "3d" ? "3D Track View" : "2D Track View"}</strong>
-          <span>Renderer placeholder. Path scope: ${escapeHtml(state.track.pathScope)}. Track=${state.track.showTrack ? "on" : "off"}, Waypoints=${state.track.showWaypoints ? "on" : "off"}.</span>
-          <span>Current marker: ${fmt(context.time)}s / ${taskLabel(context.currentTask)}.</span>
-        </div>
+        ${is3d ? `
+          <div class="viewer-placeholder">
+            <strong>3D Track View</strong>
+            <span>3D renderer is not rebuilt in this phase.</span>
+            <span>Current marker: ${fmt(context.time)}s / ${taskLabel(context.currentTask)}.</span>
+          </div>
+        ` : renderTrack2dPlot(state, context)}
       </section>
       <aside class="hud-pane ${state.track.showHud ? "" : "is-hidden"}">
         <div class="hud-placeholder">
@@ -518,6 +681,7 @@ function renderTrackTimeline(state, context) {
   const full = state.time.fullRange;
   const min = fmt(full.start, 3);
   const max = fmt(full.end, 3);
+  const span = Math.max(full.end - full.start, 1);
   return `
     <section class="track-timeline subpanel">
       <div class="section-head">
@@ -532,13 +696,15 @@ function renderTrackTimeline(state, context) {
         ${(state.data?.modes?.segments || []).map((segment) => {
           const start = Number(segment.start_s);
           const end = Number(segment.end_s);
-          const left = ((start - full.start) / (full.end - full.start)) * 100;
-          const width = Math.max(((end - start) / (full.end - full.start)) * 100, 0.4);
-          return `<span class="mode-chip" style="left:${escapeHtml(left)}%;width:${escapeHtml(width)}%" title="${escapeHtml(segment.name)} ${fmt(start)}s..${fmt(end)}s">${escapeHtml(segment.name)}</span>`;
+          const left = ((start - full.start) / span) * 100;
+          const width = Math.max(((end - start) / span) * 100, 0.4);
+          const color = modeColor(segment.name);
+          return `<span class="mode-chip" style="left:${escapeHtml(left)}%;width:${escapeHtml(width)}%;background:${escapeHtml(color)}" title="${escapeHtml(segment.name)} ${fmt(start)}s..${fmt(end)}s">${escapeHtml(segment.name)}</span>`;
         }).join("")}
       </div>
       <div class="button-row">
         ${renderButton("track-play", state.track.playing ? "Pause" : "Play")}
+        ${renderButton("send-plot-timeref", "Send Timeref")}
         ${renderSegmented("set-track-speed", [
           { id: "0.5", label: "0.5x" },
           { id: "1", label: "1x" },
@@ -558,7 +724,7 @@ function renderTrackMissionPanel(state) {
   const context = trackContext(state);
   return `
     <section class="track-header subpanel">
-      ${renderTrackSummary(context)}
+      ${renderTrackSummary(state, context)}
     </section>
     <section class="track-controls subpanel">
       ${renderTrackControls(state)}

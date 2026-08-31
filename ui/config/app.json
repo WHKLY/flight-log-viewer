@@ -1,6 +1,6 @@
 {
   "defaultTheme": "dark",
-  "defaultFontScale": "normal",
+  "defaultFontScale": "small",
   "availableThemes": ["light", "dark"],
   "features": {
     "profileFrontendSwitch": false,

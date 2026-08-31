@@ -3,7 +3,7 @@ export const DEFAULT_UI_ROOT = "../ui";
 export const DEFAULT_CONFIG = {
   app: {
     defaultTheme: "dark",
-    defaultFontScale: "normal",
+    defaultFontScale: "small",
     availableThemes: ["light", "dark"],
     features: {
       profileFrontendSwitch: false,
@@ -32,7 +32,7 @@ export const DEFAULT_CONFIG = {
   typography: {
     fontFamily: "Atkinson Hyperlegible, Noto Sans SC, sans-serif",
     monoFamily: "JetBrains Mono, ui-monospace, monospace",
-    scales: { small: 0.92, normal: 1, large: 1.12 },
+    scales: { small: 0.82, normal: 0.9, large: 0.98 },
   },
   interaction: {
     touch: { minTargetPx: 44, enablePinchZoom: true, enableDragPan: true },

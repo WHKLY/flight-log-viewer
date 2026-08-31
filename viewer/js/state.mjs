@@ -34,6 +34,9 @@ export function createInitialState() {
       cameraMode: "free",
       overheadLock: true,
     },
+    plot: {
+      timeref: null,
+    },
     ui: {
       theme: "dark",
       fontScale: "normal",
@@ -210,6 +213,12 @@ export function toggleTrackOption(state, key) {
 export function setTrackHighlightedTask(state, task) {
   state.track.highlightedTask = task || null;
   return state.track.highlightedTask;
+}
+
+export function setPlotTimeref(state, time) {
+  const number = Number(time);
+  state.plot.timeref = Number.isFinite(number) ? number : null;
+  return state.plot.timeref;
 }
 
 export function toggleCollapsed(state, key) {
