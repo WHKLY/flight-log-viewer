@@ -1,0 +1,52 @@
+{
+  "sections": [
+    {
+      "id": "app-controls",
+      "label": "App",
+      "defaultCollapsed": false,
+      "items": ["reload", "theme", "font-scale", "reset-layout"]
+    },
+    {
+      "id": "dataset",
+      "label": "Dataset",
+      "defaultCollapsed": false,
+      "items": ["dataset-label", "firmware", "profile", "time-range", "file-list", "counts"]
+    },
+    {
+      "id": "sources",
+      "label": "Sources",
+      "defaultCollapsed": false,
+      "items": ["route-source", "current-task-source", "parameter-source", "selection-readout"]
+    },
+    {
+      "id": "profile",
+      "label": "Profile",
+      "defaultCollapsed": true,
+      "items": ["profile-confidence", "profile-capabilities", "profile-command"]
+    },
+    {
+      "id": "time",
+      "label": "Time",
+      "defaultCollapsed": true,
+      "items": ["inspect-time", "global-window", "jump-mode", "jump-task"]
+    },
+    {
+      "id": "panels",
+      "label": "Panels",
+      "defaultCollapsed": true,
+      "items": ["collapse-all", "expand-important", "panel-list"]
+    },
+    {
+      "id": "quick-actions",
+      "label": "Quick Actions",
+      "defaultCollapsed": true,
+      "items": ["focus-auto", "show-track", "show-hud", "open-inspector", "clear-inspect"]
+    },
+    {
+      "id": "warnings",
+      "label": "Warnings",
+      "defaultCollapsed": true,
+      "items": ["compatibility-warnings", "missing-data"]
+    }
+  ]
+}

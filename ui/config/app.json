@@ -1,0 +1,11 @@
+{
+  "defaultTheme": "dark",
+  "defaultFontScale": "normal",
+  "availableThemes": ["light", "dark"],
+  "features": {
+    "profileFrontendSwitch": false,
+    "customPlots": true,
+    "hud": true,
+    "inspector": true
+  }
+}

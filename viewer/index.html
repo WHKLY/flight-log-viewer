@@ -8,41 +8,18 @@
   </head>
   <body>
     <main class="app-shell">
-      <aside class="control-rail">
-        <div>
-          <p class="eyebrow">Flight Log Viewer</p>
-          <h1>Data Console</h1>
-          <p class="lede">Schema-first rebuild. Charts and 3D review will attach to this source model.</p>
-        </div>
-        <section class="panel">
-          <h2>Dataset</h2>
-          <div id="dataset-summary" class="stack muted">Loading dataset...</div>
-        </section>
-        <section class="panel">
-          <h2>Source Selection</h2>
-          <label class="field">
-            <span>Mission route</span>
-            <select id="route-source"></select>
-          </label>
-          <label class="field">
-            <span>Current task</span>
-            <select id="current-source"></select>
-          </label>
-          <label class="field">
-            <span>Parameters</span>
-            <select id="parameter-source"></select>
-          </label>
-          <p id="selection-readout" class="note"></p>
-        </section>
+      <aside id="left-sidebar" class="control-rail" aria-label="Flight log controls">
+        <div id="dataset-summary" class="muted">Loading UI config...</div>
       </aside>
 
-      <section class="workspace">
+      <section class="workspace" aria-label="Analysis workspace">
         <header class="hero">
           <div>
-            <p class="eyebrow">Rebuild Baseline</p>
+            <p class="eyebrow">Configurable Workstation</p>
             <h2>Unified Source Schema</h2>
+            <p class="meta">Left controls are now driven by files under <code>ui/</code>.</p>
           </div>
-          <button id="reload-button" type="button">Reload Data</button>
+          <button type="button" data-action="reload">Reload Data</button>
         </header>
 
         <section id="status-grid" class="status-grid"></section>
@@ -87,4 +64,3 @@
     <script type="module" src="js/app.js"></script>
   </body>
 </html>
-

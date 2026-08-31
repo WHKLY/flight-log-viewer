@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flight Log Viewer Left Sidebar Config",
+  "type": "object",
+  "properties": {
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "defaultCollapsed": {"type": "boolean"},
+          "items": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["id", "label", "items"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["sections"],
+  "additionalProperties": true
+}

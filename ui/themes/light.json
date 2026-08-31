@@ -1,0 +1,71 @@
+{
+  "name": "light",
+  "background": {
+    "page": "#eaf2f7",
+    "field": "#dbe9f0",
+    "glowA": "rgba(37, 155, 181, 0.2)",
+    "glowB": "rgba(80, 126, 164, 0.16)"
+  },
+  "surface": {
+    "panel": "rgba(247, 252, 255, 0.94)",
+    "panelStrong": "rgba(238, 247, 252, 0.98)",
+    "card": "rgba(230, 242, 249, 0.82)",
+    "rail": "rgba(230, 242, 249, 0.96)",
+    "railHeader": "rgba(214, 234, 244, 0.9)"
+  },
+  "text": {
+    "strong": "#102635",
+    "normal": "#284352",
+    "muted": "#647b8a",
+    "inverse": "#f7fcff"
+  },
+  "border": {
+    "subtle": "rgba(48, 91, 115, 0.16)",
+    "strong": "rgba(48, 91, 115, 0.32)",
+    "focus": "rgba(28, 151, 181, 0.72)"
+  },
+  "primary": {
+    "base": "#168fb0",
+    "strong": "#04718f",
+    "soft": "rgba(22, 143, 176, 0.14)"
+  },
+  "secondary": {
+    "base": "#61798a",
+    "soft": "rgba(97, 121, 138, 0.16)"
+  },
+  "dynamic": {
+    "base": "#d98221",
+    "strong": "#ad5f0d",
+    "soft": "rgba(217, 130, 33, 0.18)"
+  },
+  "warning": {
+    "base": "#cf641d",
+    "soft": "rgba(207, 100, 29, 0.16)"
+  },
+  "error": {
+    "base": "#c83737",
+    "soft": "rgba(200, 55, 55, 0.14)"
+  },
+  "success": {
+    "base": "#1d9469",
+    "soft": "rgba(29, 148, 105, 0.14)"
+  },
+  "mission": {
+    "current": "#d98221",
+    "demand": "#8756d9",
+    "finalDemand": "#2179cf"
+  },
+  "hud": {
+    "frame": "rgba(22, 143, 176, 0.72)",
+    "horizonSky": "#9dd4f2",
+    "horizonGround": "#c49b69",
+    "marker": "#ad5f0d"
+  },
+  "chart": {
+    "grid": "rgba(48, 91, 115, 0.13)",
+    "axis": "rgba(40, 67, 82, 0.78)",
+    "zero": "rgba(16, 38, 53, 0.46)",
+    "modeBand": "rgba(22, 143, 176, 0.08)",
+    "modeLine": "rgba(217, 130, 33, 0.52)"
+  }
+}

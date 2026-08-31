@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flight Log Viewer Theme Config",
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "background": {"type": "object"},
+    "surface": {"type": "object"},
+    "text": {"type": "object"},
+    "border": {"type": "object"},
+    "primary": {"type": "object"},
+    "secondary": {"type": "object"},
+    "dynamic": {"type": "object"},
+    "warning": {"type": "object"},
+    "error": {"type": "object"},
+    "success": {"type": "object"},
+    "mission": {"type": "object"},
+    "hud": {"type": "object"},
+    "chart": {"type": "object"}
+  },
+  "required": ["name", "background", "surface", "text", "border", "primary", "dynamic"],
+  "additionalProperties": true
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flight Log Viewer Layout Config",
+  "type": "object",
+  "properties": {
+    "page": {"type": "object"},
+    "sidebar": {
+      "type": "object",
+      "properties": {
+        "defaultWidthPx": {"type": "number"},
+        "minWidthPx": {"type": "number"},
+        "maxWidthPx": {"type": "number"},
+        "collapsedWidthPx": {"type": "number"},
+        "resizable": {"type": "boolean"}
+      },
+      "required": ["defaultWidthPx", "minWidthPx", "maxWidthPx", "collapsedWidthPx"]
+    },
+    "workspace": {"type": "object"},
+    "breakpoints": {"type": "object"}
+  },
+  "required": ["sidebar", "workspace"],
+  "additionalProperties": true
+}

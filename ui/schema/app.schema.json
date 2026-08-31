@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flight Log Viewer App UI Config",
+  "type": "object",
+  "properties": {
+    "defaultTheme": {"type": "string"},
+    "defaultFontScale": {"type": "string"},
+    "availableThemes": {"type": "array", "items": {"type": "string"}},
+    "features": {"type": "object", "additionalProperties": {"type": "boolean"}}
+  },
+  "required": ["defaultTheme", "defaultFontScale", "availableThemes", "features"],
+  "additionalProperties": true
+}

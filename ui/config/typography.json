@@ -1,0 +1,9 @@
+{
+  "fontFamily": "Atkinson Hyperlegible, Noto Sans SC, sans-serif",
+  "monoFamily": "JetBrains Mono, ui-monospace, monospace",
+  "scales": {
+    "small": 0.92,
+    "normal": 1,
+    "large": 1.12
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "page": {
+    "maxWidth": "none",
+    "minWorkspaceWidthPx": 720
+  },
+  "sidebar": {
+    "defaultWidthPx": 320,
+    "minWidthPx": 240,
+    "maxWidthPx": 380,
+    "collapsedWidthPx": 56,
+    "resizable": true
+  },
+  "workspace": {
+    "gapPx": 12,
+    "panelRadiusPx": 14,
+    "defaultPanelHeightPx": 360,
+    "largePanelHeightPx": 620
+  },
+  "breakpoints": {
+    "tabletPortraitPx": 900,
+    "phonePx": 640
+  }
+}

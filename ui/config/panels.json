@@ -1,0 +1,12 @@
+{
+  "defaultOpen": ["overview"],
+  "importantOpen": ["track", "current-task", "inspector-summary"],
+  "panels": [
+    {"id": "overview", "label": "Overview", "defaultCollapsed": false},
+    {"id": "track", "label": "Track", "defaultCollapsed": true},
+    {"id": "current-task", "label": "Current Task", "defaultCollapsed": true},
+    {"id": "plots", "label": "Plots", "defaultCollapsed": true},
+    {"id": "parameters", "label": "Parameters", "defaultCollapsed": true},
+    {"id": "inspector-summary", "label": "Inspector", "defaultCollapsed": true}
+  ]
+}

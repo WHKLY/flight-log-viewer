@@ -1,0 +1,19 @@
+{
+  "touch": {
+    "minTargetPx": 44,
+    "enablePinchZoom": true,
+    "enableDragPan": true
+  },
+  "charts": {
+    "wheelZoom": true,
+    "dragPan": true,
+    "axisDrag": true,
+    "showZeroAxisDefault": true,
+    "showModeLinesDefault": true
+  },
+  "persistence": {
+    "rememberTheme": true,
+    "rememberSidebarWidth": true,
+    "rememberPanelCollapse": true
+  }
+}
