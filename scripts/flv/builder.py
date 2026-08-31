@@ -7,10 +7,12 @@ from typing import Any
 
 from flv.common import SERIES_GROUPS, TARGET_MESSAGES, write_json
 from flv.io.discover import discover_dataset
+from flv.normalize.current_tasks import build_current_task_domain
 from flv.normalize.firmware import detect_firmware
 from flv.normalize.mission import build_mission_domain
 from flv.normalize.modes import build_mode_domain, time_range_from_rows
 from flv.normalize.parameters import build_parameter_domain
+from flv.normalize.semantic_signals import build_semantic_signal_domain
 from flv.normalize.signals import build_signal_catalog
 from flv.parsers.dataflash import extract_dataflash
 from flv.parsers.param_file import parse_param_file
@@ -110,7 +112,9 @@ def build_dataset(dataset: Path, output: Path, profile_override: str | None = No
     parameter_domain = build_parameter_domain(file_params, rows.get("PARM", []), source_ids)
     mission_domain = build_mission_domain(waypoints, rows.get("CMD", []), selected["tlog"], source_ids)
     mission_domain["profile_strategy"] = profile.get("mission", {})
+    current_task_domain = build_current_task_domain(mission_domain)
     signals = build_signal_catalog(rows, dataflash_meta["target_formats"], source_ids["dataflash"], profile)
+    semantic_signals = build_semantic_signal_domain(signals, profile)
 
     output.mkdir(parents=True, exist_ok=True)
     (output / "domains").mkdir(parents=True, exist_ok=True)
@@ -130,7 +134,9 @@ def build_dataset(dataset: Path, output: Path, profile_override: str | None = No
     write_json(output / "signals.json", {"schema_version": 1, **signals})
     write_json(output / "domains" / "modes.json", {"schema_version": 1, **mode_domain})
     write_json(output / "domains" / "mission.json", {"schema_version": 1, **mission_domain})
+    write_json(output / "domains" / "current_tasks.json", {"schema_version": 1, **current_task_domain})
     write_json(output / "domains" / "parameters.json", {"schema_version": 1, **parameter_domain})
+    write_json(output / "domains" / "semantic_signals.json", {"schema_version": 1, **semantic_signals})
     write_json(
         output / "domains" / "track.json",
         {
@@ -149,9 +155,12 @@ def build_dataset(dataset: Path, output: Path, profile_override: str | None = No
         "parameters": parameter_domain["counts"]["merged"],
         "dataflash_parameter_records": parameter_domain["counts"]["dataflash_records"],
         "mission_sources": [source["id"] for source in mission_domain["sources"]],
+        "current_task_sources": current_task_domain["counts"]["sources_with_events"],
+        "current_task_events": current_task_domain["counts"]["events"],
         "signals": signals["counts"]["signals"],
         "numeric_signals": signals["counts"]["numeric_signals"],
         "semantic_roles": signals["counts"]["semantic_roles"],
+        "available_semantic_roles": semantic_signals["counts"]["available_roles"],
     }
     dataset_payload = {
         "schema_version": 1,
@@ -174,6 +183,8 @@ def build_dataset(dataset: Path, output: Path, profile_override: str | None = No
             "signals": "signals.json",
             "domains": "domains",
             "series": "series",
+            "current_tasks": "domains/current_tasks.json",
+            "semantic_signals": "domains/semantic_signals.json",
         },
         "warnings": compatibility_warnings(firmware, profile, selected),
     }

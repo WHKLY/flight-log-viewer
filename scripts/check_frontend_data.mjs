@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { normalizeViewerData } from "../viewer/js/data/loader.mjs";
 import { buildInitialSelection, defaultMissionSourceId, sourceRegistryList } from "../viewer/js/data/sources.mjs";
-import { missionSummary } from "../viewer/js/data/mission.mjs";
+import { currentTaskSourceOptions, missionSummary } from "../viewer/js/data/mission.mjs";
 import { parameterModes, resolveParameter } from "../viewer/js/data/parameters.mjs";
-import { signalById, signalSummary } from "../viewer/js/data/signals.mjs";
+import { preferredSignalForRole, semanticRole, signalById, signalSummary } from "../viewer/js/data/signals.mjs";
 
 const root = process.argv[2] || "public-data";
 
@@ -18,7 +18,9 @@ const data = normalizeViewerData({
   signals: await readJson("signals.json"),
   modes: await readJson("domains/modes.json"),
   mission: await readJson("domains/mission.json"),
+  currentTasks: await readJson("domains/current_tasks.json"),
   parameters: await readJson("domains/parameters.json"),
+  semanticSignals: await readJson("domains/semantic_signals.json"),
 });
 
 const selection = buildInitialSelection(data);
@@ -29,9 +31,12 @@ const signals = signalSummary(data);
 const checks = [
   ["sources", sourceRegistryList(data).length > 0],
   ["mission source", Boolean(selection.routeSource && mission.source)],
+  ["current task domain", currentTaskSourceOptions(data).some((source) => !source.disabled)],
   ["parameter modes", parameterModes(data).length > 0],
   ["NAVL1_PERIOD", navPeriod.status === "direct"],
   ["ATT.Roll signal", Boolean(signalById(data, "ATT.Roll"))],
+  ["attitude.roll role", Boolean(semanticRole(data, "attitude.roll"))],
+  ["attitude.roll preferred signal", Boolean(preferredSignalForRole(data, "attitude.roll"))],
   ["signals", signals.total > 0 && signals.numeric > 0],
 ];
 
@@ -41,5 +46,4 @@ if (failed.length) {
   process.exit(1);
 }
 
-console.log(`frontend data smoke ok: ${signals.numeric}/${signals.total} numeric signals, route=${selection.routeSource}`);
-
+console.log(`frontend data smoke ok: ${signals.numeric}/${signals.total} numeric signals, route=${selection.routeSource}, semantic=${signals.availableSemanticRoles}/${signals.semanticRoles}`);

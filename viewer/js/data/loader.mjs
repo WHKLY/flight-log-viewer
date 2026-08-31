@@ -6,7 +6,9 @@ const DATA_FILES = {
   signals: "signals.json",
   modes: "domains/modes.json",
   mission: "domains/mission.json",
+  currentTasks: "domains/current_tasks.json",
   parameters: "domains/parameters.json",
+  semanticSignals: "domains/semantic_signals.json",
 };
 
 export async function loadJson(dataRoot, path) {
@@ -31,11 +33,12 @@ export function normalizeViewerData(data) {
     signals: data.signals || { signals: {} },
     modes: data.modes || { segments: [], focus_ranges: {} },
     mission: data.mission || { sources: [] },
+    currentTasks: data.currentTasks || { sources: [], counts: {} },
     parameters: data.parameters || { selection_modes: [], available: {}, sets: {}, timeline: [] },
+    semanticSignals: data.semanticSignals || { roles: {}, counts: {} },
   };
 }
 
 export function dataFiles() {
   return { ...DATA_FILES };
 }
-

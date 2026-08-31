@@ -21,6 +21,23 @@ export function routeItemsAt(source, time) {
   return Array.isArray(source?.items) ? source.items : [];
 }
 
+export function currentTaskSourceById(data, sourceId) {
+  return (data?.currentTasks?.sources || []).find((source) => source.id === sourceId) || null;
+}
+
+export function currentTaskEventAt(source, time) {
+  const events = Array.isArray(source?.events) ? source.events : [];
+  if (!events.length) return null;
+  if (!finite(time)) return events[events.length - 1];
+  let selected = null;
+  for (const event of events) {
+    if (!finite(event.time_s)) continue;
+    if (Number(event.time_s) <= Number(time)) selected = event;
+    else break;
+  }
+  return selected;
+}
+
 export function currentEventAt(source, time) {
   const events = Array.isArray(source?.current_events) ? source.current_events : [];
   if (!events.length) return null;
@@ -37,12 +54,14 @@ export function currentEventAt(source, time) {
 export function missionSummary(data, sourceId, time) {
   const source = missionSourceById(data, sourceId);
   const routeItems = routeItemsAt(source, time);
-  const current = currentEventAt(source, time);
+  const taskSource = currentTaskSourceById(data, sourceId);
+  const current = currentTaskEventAt(taskSource, time) || currentEventAt(source, time);
   return {
     source,
     routeItems,
     current,
     currentSeq: current?.seq ?? null,
+    currentTaskSource: taskSource,
     status: source ? "direct" : "missing",
   };
 }
@@ -55,3 +74,10 @@ export function missionSourceOptions(data) {
   }));
 }
 
+export function currentTaskSourceOptions(data) {
+  return (data?.currentTasks?.sources || []).map((source) => ({
+    id: source.id,
+    label: source.label || source.id,
+    disabled: source.status !== "direct",
+  }));
+}

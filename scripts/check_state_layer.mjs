@@ -15,7 +15,9 @@ const data = normalizeViewerData({
   signals: await readJson("signals.json"),
   modes: await readJson("domains/modes.json"),
   mission: await readJson("domains/mission.json"),
+  currentTasks: await readJson("domains/current_tasks.json"),
   parameters: await readJson("domains/parameters.json"),
+  semanticSignals: await readJson("domains/semantic_signals.json"),
 });
 
 const state = attachData(createInitialState(), data);
@@ -33,6 +35,8 @@ const checks = [
   ["time window", state.time.window.end > state.time.window.start],
   ["marker clamp", state.track.markerTime === state.time.window.end],
   ["inspect", state.time.inspect === state.track.markerTime],
+  ["semantic signals", data.semanticSignals?.counts?.available_roles > 0],
+  ["current tasks", data.currentTasks?.counts?.sources_with_events > 0],
 ];
 
 const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);
@@ -42,4 +46,3 @@ if (failed.length) {
 }
 
 console.log(`state smoke ok: ${state.selection.routeSource}, window=${state.time.window.start.toFixed(2)}..${state.time.window.end.toFixed(2)}`);
-
