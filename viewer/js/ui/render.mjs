@@ -171,11 +171,24 @@ function renderSelect(label, id, options, selected) {
   `;
 }
 
+export function applyWorkspacePanelVisibility(state) {
+  for (const panel of document.querySelectorAll("[data-panel-id]")) {
+    const panelId = panel.dataset.panelId;
+    panel.classList.toggle("is-hidden", Boolean(state.ui.panels?.[panelId]?.collapsed));
+  }
+  for (const group of document.querySelectorAll(".workspace-panel-group")) {
+    const panels = [...group.querySelectorAll("[data-panel-id]")];
+    group.classList.toggle("is-hidden", panels.length > 0 && panels.every((panel) => panel.classList.contains("is-hidden")));
+  }
+}
+
 export function renderSidebar(state) {
   const sidebar = $("#left-sidebar");
+  const shell = $(".app-shell");
   if (!sidebar) return;
   const sections = state.config?.leftSidebar?.sections || [];
   sidebar.classList.toggle("is-collapsed", Boolean(state.ui.sidebar.collapsed));
+  shell?.classList.toggle("is-sidebar-collapsed", Boolean(state.ui.sidebar.collapsed));
   sidebar.innerHTML = `
     <div class="sidebar-brand">
       <div>
@@ -189,6 +202,7 @@ export function renderSidebar(state) {
       ${sections.map((section) => renderSidebarSection(state, section)).join("")}
     </div>
   `;
+  applyWorkspacePanelVisibility(state);
 }
 
 function renderStatus(state) {
@@ -317,4 +331,5 @@ export function renderApp(state) {
   renderModes(state);
   renderParameters(state);
   renderSignals(state);
+  applyWorkspacePanelVisibility(state);
 }

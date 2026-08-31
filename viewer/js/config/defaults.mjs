@@ -18,7 +18,7 @@ export const DEFAULT_CONFIG = {
       defaultWidthPx: 320,
       minWidthPx: 240,
       maxWidthPx: 380,
-      collapsedWidthPx: 56,
+      collapsedWidthPx: 72,
       resizable: true,
     },
     workspace: {
@@ -40,15 +40,15 @@ export const DEFAULT_CONFIG = {
     persistence: { rememberTheme: true, rememberSidebarWidth: true, rememberPanelCollapse: true },
   },
   panels: {
-    defaultOpen: ["overview"],
-    importantOpen: ["track", "current-task", "inspector-summary"],
+    defaultOpen: [],
+    importantOpen: ["overview", "mission-sources"],
     panels: [
-      { id: "overview", label: "Overview", defaultCollapsed: false },
-      { id: "track", label: "Track", defaultCollapsed: true },
-      { id: "current-task", label: "Current Task", defaultCollapsed: true },
-      { id: "plots", label: "Plots", defaultCollapsed: true },
+      { id: "overview", label: "Overview Status", defaultCollapsed: true },
+      { id: "source-registry", label: "Source Registry", defaultCollapsed: true },
+      { id: "mission-sources", label: "Mission Sources", defaultCollapsed: true },
+      { id: "mode-segments", label: "Mode Segments", defaultCollapsed: true },
       { id: "parameters", label: "Parameters", defaultCollapsed: true },
-      { id: "inspector-summary", label: "Inspector", defaultCollapsed: true },
+      { id: "signal-catalog", label: "Signal Catalog", defaultCollapsed: true },
     ],
   },
   leftSidebar: {

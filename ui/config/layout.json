@@ -7,7 +7,7 @@
     "defaultWidthPx": 320,
     "minWidthPx": 240,
     "maxWidthPx": 380,
-    "collapsedWidthPx": 56,
+    "collapsedWidthPx": 72,
     "resizable": true
   },
   "workspace": {

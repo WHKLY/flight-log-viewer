@@ -17,14 +17,14 @@
           <div>
             <p class="eyebrow">Configurable Workstation</p>
             <h2>Unified Source Schema</h2>
-            <p class="meta">Left controls are now driven by files under <code>ui/</code>.</p>
+            <p class="meta">Right panels are controlled from the left sidebar.</p>
           </div>
           <button type="button" data-action="reload">Reload Data</button>
         </header>
 
-        <section id="status-grid" class="status-grid"></section>
+        <section id="status-grid" class="status-grid workspace-panel" data-panel-id="overview"></section>
 
-        <section class="panel wide">
+        <section class="panel wide workspace-panel" data-panel-id="source-registry">
           <div class="section-head">
             <h2>Source Registry</h2>
             <span id="source-count" class="badge">0</span>
@@ -32,7 +32,7 @@
           <div id="source-list" class="card-grid"></div>
         </section>
 
-        <section class="panel wide">
+        <section class="panel wide workspace-panel" data-panel-id="mission-sources">
           <div class="section-head">
             <h2>Mission Sources</h2>
             <span id="mission-count" class="badge">0</span>
@@ -40,18 +40,18 @@
           <div id="mission-list" class="card-grid"></div>
         </section>
 
-        <section class="two-column">
-          <section class="panel">
+        <section class="two-column workspace-panel-group">
+          <section class="panel workspace-panel" data-panel-id="mode-segments">
             <h2>Mode Segments</h2>
             <div id="mode-list" class="scroll-list"></div>
           </section>
-          <section class="panel">
+          <section class="panel workspace-panel" data-panel-id="parameters">
             <h2>Parameters</h2>
             <div id="parameter-summary" class="stack"></div>
           </section>
         </section>
 
-        <section class="panel wide">
+        <section class="panel wide workspace-panel" data-panel-id="signal-catalog">
           <div class="section-head">
             <h2>Signal Catalog</h2>
             <span id="signal-count" class="badge">0</span>

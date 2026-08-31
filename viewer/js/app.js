@@ -15,6 +15,7 @@ import {
   updateSelection,
 } from "./state.mjs";
 import {
+  applyWorkspacePanelVisibility,
   renderApp,
   renderLoadError,
   renderParameters,
@@ -60,6 +61,13 @@ async function initialize() {
   }
 }
 
+function openPanel(panelId) {
+  state.ui.panels[panelId] ||= {};
+  state.ui.panels[panelId].collapsed = false;
+  renderSidebar(state);
+  applyWorkspacePanelVisibility(state);
+}
+
 function handleAction(action, target) {
   switch (action) {
     case "reload":
@@ -82,24 +90,23 @@ function handleAction(action, target) {
       resetUiLayout(state);
       applyUiState();
       renderSidebar(state);
+      applyWorkspacePanelVisibility(state);
       break;
     case "collapse-all-panels":
       collapseAllPanels(state);
       renderSidebar(state);
+      applyWorkspacePanelVisibility(state);
       break;
     case "expand-important-panels":
       expandImportantPanels(state);
       renderSidebar(state);
+      applyWorkspacePanelVisibility(state);
       break;
     case "show-track":
-      state.ui.panels.track ||= {};
-      state.ui.panels.track.collapsed = false;
-      renderSidebar(state);
+      openPanel("mission-sources");
       break;
     case "open-inspector":
-      state.ui.panels["inspector-summary"] ||= {};
-      state.ui.panels["inspector-summary"].collapsed = false;
-      renderSidebar(state);
+      openPanel("overview");
       break;
     case "clear-inspect":
       state.time.inspect = null;
@@ -144,6 +151,7 @@ function bindEvents() {
       state.ui.panels[target.dataset.panelId] ||= {};
       state.ui.panels[target.dataset.panelId].collapsed = !target.checked;
       renderSidebar(state);
+      applyWorkspacePanelVisibility(state);
     }
   });
 }

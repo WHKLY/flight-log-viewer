@@ -97,16 +97,21 @@ code {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(var(--sidebar-min-width), var(--sidebar-width)) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   gap: var(--workspace-gap);
   min-height: 100vh;
   padding: var(--workspace-gap);
+}
+
+.app-shell.is-sidebar-collapsed {
+  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
 }
 
 .control-rail {
   position: sticky;
   top: var(--workspace-gap);
   align-self: start;
+  width: var(--sidebar-width);
   min-width: var(--sidebar-min-width);
   max-width: var(--sidebar-max-width);
   max-height: calc(100vh - (var(--workspace-gap) * 2));
@@ -120,8 +125,10 @@ code {
 }
 
 .control-rail.is-collapsed {
-  min-width: var(--sidebar-collapsed-width);
   width: var(--sidebar-collapsed-width);
+  min-width: var(--sidebar-collapsed-width);
+  max-width: var(--sidebar-collapsed-width);
+  padding: 0.45rem;
   overflow: hidden;
 }
 
@@ -130,6 +137,16 @@ code {
 .control-rail.is-collapsed .sidebar-brand h1,
 .control-rail.is-collapsed .sidebar-brand .eyebrow {
   display: none;
+}
+
+.control-rail.is-collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 0.45rem;
+}
+
+.control-rail.is-collapsed .icon-button {
+  min-width: 2.55rem;
+  min-height: 2.55rem;
 }
 
 .sidebar-brand {
@@ -296,6 +313,11 @@ code {
   overflow: auto;
   color: var(--ui-text-strong);
   white-space: nowrap;
+}
+
+.workspace-panel.is-hidden,
+.workspace-panel-group.is-hidden {
+  display: none;
 }
 
 .workspace {
