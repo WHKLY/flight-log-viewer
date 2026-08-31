@@ -1,6 +1,6 @@
-import { currentTaskSourceOptions, missionSourceOptions, missionSources } from "../data/mission.mjs";
+import { currentTaskSourceOptions, missionSourceOptions } from "../data/mission.mjs";
 import { parameterModes, parameterSample, selectedParameterSet } from "../data/parameters.mjs";
-import { selectionReadout, sourceRegistryList } from "../data/sources.mjs";
+import { missionSources, selectionReadout, sourceRegistryList } from "../data/sources.mjs";
 import { signalList, signalSummary } from "../data/signals.mjs";
 
 function $(selector) {
