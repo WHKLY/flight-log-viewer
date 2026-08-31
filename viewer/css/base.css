@@ -431,6 +431,158 @@ code {
   min-width: 0;
 }
 
+.track-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--workspace-gap);
+}
+
+.track-quality-tags {
+  margin-top: 0.75rem;
+}
+
+.track-toggle-row button {
+  flex: 0 1 auto;
+}
+
+.track-main-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.58fr) minmax(260px, 0.42fr);
+  gap: var(--workspace-gap);
+  min-width: 0;
+}
+
+.task-list {
+  display: grid;
+  gap: 0.45rem;
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.task-list.is-hidden,
+.hud-pane.is-hidden {
+  display: none;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: 4rem minmax(9rem, 0.55fr) minmax(13rem, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 680px;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 0.85rem;
+  padding: 0.65rem;
+  color: var(--ui-text-normal);
+  background: var(--ui-surface-card);
+  text-align: left;
+}
+
+.task-row.active {
+  border-color: var(--ui-dynamic-base);
+  box-shadow: inset 0 0 0 1px var(--ui-dynamic-soft);
+}
+
+.task-id {
+  color: var(--ui-dynamic-strong);
+  font-family: var(--ui-mono-family);
+}
+
+.current-task-card,
+.hud-placeholder,
+.viewer-placeholder {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--panel-radius);
+  padding: 1rem;
+  background: var(--ui-surface-card);
+}
+
+.current-task-card span,
+.hud-placeholder span,
+.viewer-placeholder span {
+  overflow: auto;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
+}
+
+.track-viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
+  gap: var(--workspace-gap);
+  min-width: 0;
+}
+
+.track-viewer-hud {
+  grid-template-columns: minmax(280px, 0.55fr) minmax(280px, 0.45fr);
+}
+
+.viewer-pane,
+.hud-pane {
+  min-width: 0;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: var(--panel-radius);
+  padding: 0.85rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.viewer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.viewer-placeholder {
+  min-height: 20rem;
+  place-content: center;
+  border-style: dashed;
+  text-align: center;
+}
+
+.hud-placeholder {
+  min-height: 20rem;
+  place-content: center;
+  border-color: var(--ui-primary-base);
+  text-align: center;
+}
+
+.timeline-control {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.75rem 0;
+}
+
+.timeline-control input {
+  width: 100%;
+  accent-color: var(--ui-dynamic-base);
+}
+
+.mode-strip {
+  position: relative;
+  min-height: 2.3rem;
+  overflow: hidden;
+  border: 1px solid var(--ui-border-subtle);
+  border-radius: 999px;
+  background: var(--ui-surface-card);
+}
+
+.mode-chip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--ui-border-subtle);
+  padding: 0.58rem 0.35rem;
+  color: var(--ui-text-inverse);
+  background: var(--ui-primary-base);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
 .wide {
   min-width: 0;
 }
@@ -647,6 +799,12 @@ h3 {
   .hero {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .track-main-grid,
+  .track-viewer,
+  .track-viewer-hud {
+    grid-template-columns: 1fr;
   }
 
   .status-grid,

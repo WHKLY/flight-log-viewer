@@ -17,10 +17,22 @@ export function createInitialState() {
     },
     track: {
       markerTime: null,
-      pathMode: "window",
+      window: { start: 0, end: 1 },
+      displayMode: "split",
+      pathScope: "window",
+      routeDisplayMode: "selected",
+      currentTaskLocked: true,
+      showTaskList: true,
+      showTrack: true,
+      showWaypoints: true,
+      showHud: true,
+      showTargets: true,
+      highlightedTask: null,
       markerScope: "window",
       playing: false,
       playbackSpeed: 1,
+      cameraMode: "free",
+      overheadLock: true,
     },
     ui: {
       theme: "dark",
@@ -40,6 +52,13 @@ export function datasetTimeRange(data) {
   const start = Number.isFinite(Number(range.start_s)) ? Number(range.start_s) : 0;
   const end = Number.isFinite(Number(range.end_s)) && Number(range.end_s) > start ? Number(range.end_s) : start + 1;
   return { start, end };
+}
+
+function initialTrackTime(data, fallbackRange) {
+  const auto = (data?.modes?.segments || []).find((segment) => String(segment.name || "").toUpperCase() === "AUTO");
+  const autoStart = Number(auto?.start_s);
+  if (Number.isFinite(autoStart)) return autoStart;
+  return fallbackRange.start;
 }
 
 export function attachConfig(state, config) {
@@ -70,12 +89,14 @@ function panelState(config) {
 
 export function attachData(state, data) {
   const fullRange = datasetTimeRange(data);
+  const markerTime = initialTrackTime(data, fullRange);
   state.data = data;
   state.loaded = true;
   state.time.fullRange = fullRange;
   state.time.window = { ...fullRange };
   state.time.inspect = null;
-  state.track.markerTime = fullRange.end;
+  state.track.window = { ...fullRange };
+  state.track.markerTime = markerTime;
   state.selection = buildInitialSelection(data, state.selection);
   return state;
 }
@@ -160,6 +181,35 @@ export function setTrackMarkerTime(state, time) {
   const bounds = state.track.markerScope === "full" ? state.time.fullRange : state.time.window;
   state.track.markerTime = Math.min(Math.max(number, bounds.start), bounds.end);
   return state.track.markerTime;
+}
+
+export function setTrackWindow(state, start, end) {
+  const full = state.time.fullRange;
+  const nextStart = Number.isFinite(Number(start)) ? Number(start) : full.start;
+  const nextEnd = Number.isFinite(Number(end)) && Number(end) > nextStart ? Number(end) : nextStart + 1;
+  state.track.window = { start: nextStart, end: nextEnd };
+  return state.track.window;
+}
+
+export function setTrackOption(state, key, value) {
+  if (!Object.prototype.hasOwnProperty.call(state.track, key)) {
+    throw new Error(`Unknown track option: ${key}`);
+  }
+  state.track[key] = value;
+  return state.track[key];
+}
+
+export function toggleTrackOption(state, key) {
+  if (!Object.prototype.hasOwnProperty.call(state.track, key)) {
+    throw new Error(`Unknown track option: ${key}`);
+  }
+  state.track[key] = !state.track[key];
+  return state.track[key];
+}
+
+export function setTrackHighlightedTask(state, task) {
+  state.track.highlightedTask = task || null;
+  return state.track.highlightedTask;
 }
 
 export function toggleCollapsed(state, key) {

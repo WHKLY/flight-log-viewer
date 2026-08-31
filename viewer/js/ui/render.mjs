@@ -1,6 +1,12 @@
-import { currentTaskSourceOptions, missionSourceOptions } from "../data/mission.mjs";
+import {
+  currentTaskEventAt,
+  currentTaskSourceById,
+  currentTaskSourceOptions,
+  missionSourceOptions,
+  routeItemsAt,
+} from "../data/mission.mjs";
 import { parameterModes, parameterSample, selectedParameterSet } from "../data/parameters.mjs";
-import { missionSources, selectionReadout, sourceRegistryList } from "../data/sources.mjs";
+import { missionSourceById, missionSources, selectionReadout, sourceRegistryList } from "../data/sources.mjs";
 import { signalList, signalSummary } from "../data/signals.mjs";
 
 function $(selector) {
@@ -22,6 +28,10 @@ function fmt(value, digits = 2) {
   return Number.isFinite(number) ? number.toFixed(digits) : "missing";
 }
 
+function finite(value) {
+  return Number.isFinite(Number(value));
+}
+
 function optionHtml(options, selected) {
   if (!options.length) return '<option value="">missing</option>';
   return options
@@ -33,10 +43,10 @@ function renderButton(action, label, extra = "") {
   return `<button type="button" data-action="${escapeHtml(action)}" ${extra}>${escapeHtml(label)}</button>`;
 }
 
-function renderSegmented(name, options, selected) {
+function renderSegmented(action, options, selected) {
   return `
-    <div class="segmented" role="group" aria-label="${escapeHtml(name)}">
-      ${options.map((option) => `<button type="button" class="${option.id === selected ? "active" : ""}" data-action="${escapeHtml(name)}" data-value="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}
+    <div class="segmented" role="group" aria-label="${escapeHtml(action)}">
+      ${options.map((option) => `<button type="button" class="${option.id === selected ? "active" : ""}" data-action="${escapeHtml(action)}" data-value="${escapeHtml(option.id)}">${escapeHtml(option.label)}</button>`).join("")}
     </div>
   `;
 }
@@ -79,6 +89,47 @@ function panelConfigs(state) {
 
 function sidebarSectionCollapsed(state, sectionId) {
   return Boolean(state.ui.sidebar.sections?.[sectionId]?.collapsed);
+}
+
+function modeAt(data, time) {
+  const segments = data?.modes?.segments || [];
+  if (!segments.length) return null;
+  const number = Number(time);
+  if (!Number.isFinite(number)) return segments[segments.length - 1];
+  return segments.find((segment) => number >= Number(segment.start_s) && number <= Number(segment.end_s))
+    || [...segments].reverse().find((segment) => Number(segment.start_s) <= number)
+    || segments[0];
+}
+
+function trackContext(state) {
+  const time = finite(state.track.markerTime) ? Number(state.track.markerTime) : state.time.fullRange.start;
+  const routeSource = missionSourceById(state.data, state.selection.routeSource);
+  const taskSource = currentTaskSourceById(state.data, state.selection.currentSource);
+  const currentTask = currentTaskEventAt(taskSource, time);
+  const routeItems = routeItemsAt(routeSource, time);
+  const currentMode = modeAt(state.data, time);
+  return { time, routeSource, taskSource, currentTask, routeItems, currentMode };
+}
+
+function taskLabel(task) {
+  if (!task) return "No current task";
+  const command = task.command_name || (task.command === null || task.command === undefined ? "MISSION_CURRENT" : `CMD_${task.command}`);
+  return `#${task.seq ?? "?"} ${command}`;
+}
+
+function taskLocation(task) {
+  if (!task || !finite(task.lat) || !finite(task.lon)) return "no position";
+  return `${fmt(task.lat, 7)}, ${fmt(task.lon, 7)} alt ${fmt(task.alt, 1)}m`;
+}
+
+function qualityTags(context) {
+  const tags = [];
+  if (context.currentMode?.name) tags.push(context.currentMode.name);
+  if (context.routeSource?.kind) tags.push(context.routeSource.kind);
+  if (context.taskSource?.kind) tags.push(context.taskSource.kind);
+  if (!context.currentTask) tags.push("NO CURRENT TASK");
+  if (!context.routeItems.length) tags.push("NO ROUTE");
+  return tags;
 }
 
 export function setDatasetMessage(message) {
@@ -362,16 +413,178 @@ function renderExternalSourcesPanel(state) {
   `;
 }
 
-function renderTrackMissionPanel(state) {
+function renderTrackSummary(context) {
+  return `
+    <div class="track-summary-grid">
+      ${renderMetric("Selected Time", `${fmt(context.time)}s`, "good")}
+      ${renderMetric("Flight Mode", context.currentMode?.name || "missing", context.currentMode?.name === "AUTO" ? "good" : "warn")}
+      ${renderMetric("Current Task", taskLabel(context.currentTask), context.currentTask ? "good" : "warn")}
+      ${renderMetric("Route Items", context.routeItems.length)}
+    </div>
+    <div class="tag-list track-quality-tags">
+      ${qualityTags(context).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderTrackControls(state) {
   return `
     <div class="source-choice-grid">
-      ${renderSelect("Mission route source", "route-source", missionSourceOptions(state.data), state.selection.routeSource)}
-      ${renderSelect("Current task source", "current-source", currentTaskSourceOptions(state.data), state.selection.currentSource)}
-      <div class="sidebar-readout">
-        <span>Selection</span>
-        <strong>${escapeHtml(selectionReadout(state.selection))}</strong>
+      ${renderSelect("Mission route source", "track-route-source", missionSourceOptions(state.data), state.selection.routeSource)}
+      ${renderSelect("Current task source", "track-current-source", currentTaskSourceOptions(state.data), state.selection.currentSource)}
+      <div class="field">
+        <span>Route display</span>
+        ${renderSegmented("set-route-display-mode", [
+          { id: "selected", label: "Selected" },
+          { id: "compare", label: "Compare" },
+          { id: "external", label: "External" },
+          { id: "onboard", label: "Onboard" },
+        ], state.track.routeDisplayMode)}
+      </div>
+      <div class="field">
+        <span>Viewer</span>
+        ${renderSegmented("set-track-display-mode", [
+          { id: "split", label: "Split" },
+          { id: "2d", label: "2D" },
+          { id: "3d", label: "3D" },
+          { id: "hud", label: "HUD" },
+        ], state.track.displayMode)}
       </div>
     </div>
+    <div class="button-row track-toggle-row">
+      ${renderButton("toggle-track-option", state.track.showTaskList ? "Hide Tasks" : "Show Tasks", 'data-track-option="showTaskList"')}
+      ${renderButton("toggle-track-option", state.track.showTrack ? "Hide Track" : "Show Track", 'data-track-option="showTrack"')}
+      ${renderButton("toggle-track-option", state.track.showWaypoints ? "Hide Waypoints" : "Show Waypoints", 'data-track-option="showWaypoints"')}
+      ${renderButton("toggle-track-option", state.track.showHud ? "Hide HUD" : "Show HUD", 'data-track-option="showHud"')}
+      ${renderButton("toggle-track-option", state.track.showTargets ? "Hide Targets" : "Show Targets", 'data-track-option="showTargets"')}
+    </div>
+  `;
+}
+
+function renderTaskList(state, context) {
+  const currentSeq = context.currentTask?.seq;
+  const highlighted = state.track.highlightedTask;
+  return `
+    <div class="task-list ${state.track.showTaskList ? "" : "is-hidden"}">
+      ${context.routeItems.map((item) => {
+        const active = item.seq === currentSeq || (highlighted?.sourceId === item.source_id && Number(highlighted?.seq) === Number(item.seq));
+        return `
+          <button type="button" class="task-row ${active ? "active" : ""}" data-action="select-task" data-source-id="${escapeHtml(item.source_id || context.routeSource?.id || "")}" data-task-seq="${escapeHtml(item.seq)}" data-time-s="${escapeHtml(item.time_s ?? "")}">
+            <span class="task-id">#${escapeHtml(item.seq ?? "?")}</span>
+            <strong>${escapeHtml(item.command_name || `CMD_${item.command ?? "?"}`)}</strong>
+            <span class="meta">${escapeHtml(taskLocation(item))}</span>
+            <span class="tag ${active ? "good" : ""}">${active ? "active" : "route"}</span>
+          </button>
+        `;
+      }).join("") || '<div class="muted">No route items for selected source/time.</div>'}
+    </div>
+  `;
+}
+
+function renderTrackViewer(state, context) {
+  return `
+    <div class="track-viewer track-viewer-${escapeHtml(state.track.displayMode)}">
+      <section class="viewer-pane viewer-pane-primary">
+        <div class="viewer-toolbar">
+          ${renderSegmented("set-track-path-scope", [
+            { id: "window", label: "Window Path" },
+            { id: "full", label: "Full Path" },
+          ], state.track.pathScope)}
+          <div class="button-row">
+            ${renderButton("track-fit", "Fit Track")}
+            ${renderButton("track-fit-window", "Fit Window")}
+            ${renderButton("track-fit-route", "Fit Route")}
+          </div>
+        </div>
+        <div class="viewer-placeholder">
+          <strong>${state.track.displayMode === "3d" ? "3D Track View" : "2D Track View"}</strong>
+          <span>Renderer placeholder. Path scope: ${escapeHtml(state.track.pathScope)}. Track=${state.track.showTrack ? "on" : "off"}, Waypoints=${state.track.showWaypoints ? "on" : "off"}.</span>
+          <span>Current marker: ${fmt(context.time)}s / ${taskLabel(context.currentTask)}.</span>
+        </div>
+      </section>
+      <aside class="hud-pane ${state.track.showHud ? "" : "is-hidden"}">
+        <div class="hud-placeholder">
+          <strong>HUD</strong>
+          <span>Mode ${escapeHtml(context.currentMode?.name || "missing")}</span>
+          <span>${escapeHtml(taskLabel(context.currentTask))}</span>
+          <span>Targets ${state.track.showTargets ? "visible" : "hidden"}</span>
+        </div>
+      </aside>
+    </div>
+  `;
+}
+
+function renderTrackTimeline(state, context) {
+  const full = state.time.fullRange;
+  const min = fmt(full.start, 3);
+  const max = fmt(full.end, 3);
+  return `
+    <section class="track-timeline subpanel">
+      <div class="section-head">
+        <h3>Track Timeline</h3>
+        <span class="badge">${fmt(context.time)}s</span>
+      </div>
+      <label class="timeline-control">
+        <span>Selected aircraft/HUD time</span>
+        <input id="track-marker-time" type="range" min="${escapeHtml(min)}" max="${escapeHtml(max)}" step="0.05" value="${escapeHtml(fmt(context.time, 3))}">
+      </label>
+      <div class="mode-strip">
+        ${(state.data?.modes?.segments || []).map((segment) => {
+          const start = Number(segment.start_s);
+          const end = Number(segment.end_s);
+          const left = ((start - full.start) / (full.end - full.start)) * 100;
+          const width = Math.max(((end - start) / (full.end - full.start)) * 100, 0.4);
+          return `<span class="mode-chip" style="left:${escapeHtml(left)}%;width:${escapeHtml(width)}%" title="${escapeHtml(segment.name)} ${fmt(start)}s..${fmt(end)}s">${escapeHtml(segment.name)}</span>`;
+        }).join("")}
+      </div>
+      <div class="button-row">
+        ${renderButton("track-play", state.track.playing ? "Pause" : "Play")}
+        ${renderSegmented("set-track-speed", [
+          { id: "0.5", label: "0.5x" },
+          { id: "1", label: "1x" },
+          { id: "2", label: "2x" },
+          { id: "5", label: "5x" },
+        ], String(state.track.playbackSpeed))}
+        ${renderButton("prev-task", "Prev Task")}
+        ${renderButton("next-task", "Next Task")}
+        ${renderButton("prev-mode", "Prev Mode")}
+        ${renderButton("next-mode", "Next Mode")}
+      </div>
+    </section>
+  `;
+}
+
+function renderTrackMissionPanel(state) {
+  const context = trackContext(state);
+  return `
+    <section class="track-header subpanel">
+      ${renderTrackSummary(context)}
+    </section>
+    <section class="track-controls subpanel">
+      ${renderTrackControls(state)}
+    </section>
+    <section class="track-main-grid">
+      <div class="subpanel">
+        <div class="section-head">
+          <h3>Mission Tasks</h3>
+          <span class="badge">${escapeHtml(context.routeItems.length)}</span>
+        </div>
+        ${renderTaskList(state, context)}
+      </div>
+      <div class="subpanel">
+        <div class="section-head">
+          <h3>Current Task Detail</h3>
+          <span class="badge">${escapeHtml(context.taskSource?.label || context.taskSource?.id || "missing")}</span>
+        </div>
+        <div class="current-task-card">
+          <strong>${escapeHtml(taskLabel(context.currentTask))}</strong>
+          <span>${escapeHtml(taskLocation(context.currentTask))}</span>
+          <span>time ${fmt(context.currentTask?.time_s)}s | mode ${escapeHtml(context.currentMode?.name || "missing")}</span>
+        </div>
+      </div>
+    </section>
+    ${renderTrackViewer(state, context)}
+    ${renderTrackTimeline(state, context)}
     <section class="subpanel">
       ${renderMissionPanel(state)}
     </section>
@@ -454,11 +667,12 @@ export function renderSelectors(state) {
   const route = $("#route-source");
   const current = $("#current-source");
   const parameter = $("#parameter-source");
-  const readout = $("#selection-readout");
   if (route) route.innerHTML = optionHtml(missionSourceOptions(state.data), state.selection.routeSource);
   if (current) current.innerHTML = optionHtml(currentTaskSourceOptions(state.data), state.selection.currentSource);
   if (parameter) parameter.innerHTML = optionHtml(parameterModes(state.data), state.selection.parameterSource);
-  if (readout) readout.textContent = selectionReadout(state.selection);
+  for (const readout of document.querySelectorAll("#selection-readout")) {
+    readout.textContent = selectionReadout(state.selection);
+  }
 }
 
 export function renderParameters(state) {
