@@ -87,9 +87,9 @@ function renderSidebarItem(state, item) {
     case "reload":
       return `<div class="sidebar-item">${renderButton("reload", "Reload Data")}</div>`;
     case "theme":
-      return `<div class="sidebar-item"><label>Theme</label>${renderSegmented("set-theme", [{ id: "light", label: "Light" }, { id: "dark", label: "Dark" }], state.ui.theme)}</div>`;
+      return `<div class="sidebar-item"><span class="control-label">Theme</span>${renderSegmented("set-theme", [{ id: "light", label: "Light" }, { id: "dark", label: "Dark" }], state.ui.theme)}</div>`;
     case "font-scale":
-      return `<div class="sidebar-item"><label>Font</label>${renderSegmented("set-font-scale", [{ id: "small", label: "Small" }, { id: "normal", label: "Normal" }, { id: "large", label: "Large" }], state.ui.fontScale)}</div>`;
+      return `<div class="sidebar-item"><span class="control-label">Font</span>${renderSegmented("set-font-scale", [{ id: "small", label: "Small" }, { id: "normal", label: "Normal" }, { id: "large", label: "Large" }], state.ui.fontScale)}</div>`;
     case "reset-layout":
       return `<div class="sidebar-item">${renderButton("reset-layout", "Reset Layout")}</div>`;
     case "dataset-label":
