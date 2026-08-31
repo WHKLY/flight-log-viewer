@@ -9,17 +9,15 @@ import {
   expandImportantPanels,
   resetUiLayout,
   setFontScale,
+  setPanelCollapsed,
   setTheme,
   toggleSidebarCollapsed,
   toggleSidebarSection,
   updateSelection,
 } from "./state.mjs";
 import {
-  applyWorkspacePanelVisibility,
   renderApp,
   renderLoadError,
-  renderParameters,
-  renderSelectors,
   renderSidebar,
   setDatasetMessage,
 } from "./ui/render.mjs";
@@ -37,7 +35,7 @@ async function setUiTheme(themeName) {
   setTheme(state, themeName);
   state.config.themes[themeName] = await loadThemeByName(themeName);
   applyTheme(state.config.themes[themeName]);
-  renderSidebar(state);
+  renderApp(state);
 }
 
 async function boot() {
@@ -62,10 +60,8 @@ async function initialize() {
 }
 
 function openPanel(panelId) {
-  state.ui.panels[panelId] ||= {};
-  state.ui.panels[panelId].collapsed = false;
-  renderSidebar(state);
-  applyWorkspacePanelVisibility(state);
+  setPanelCollapsed(state, panelId, false);
+  renderApp(state);
 }
 
 function handleAction(action, target) {
@@ -84,23 +80,24 @@ function handleAction(action, target) {
     case "set-font-scale":
       setFontScale(state, target.dataset.value);
       applyTypography(state.config?.typography, state.ui.fontScale);
-      renderSidebar(state);
+      renderApp(state);
       break;
     case "reset-layout":
       resetUiLayout(state);
       applyUiState();
-      renderSidebar(state);
-      applyWorkspacePanelVisibility(state);
+      renderApp(state);
       break;
     case "collapse-all-panels":
       collapseAllPanels(state);
-      renderSidebar(state);
-      applyWorkspacePanelVisibility(state);
+      renderApp(state);
       break;
     case "expand-important-panels":
       expandImportantPanels(state);
-      renderSidebar(state);
-      applyWorkspacePanelVisibility(state);
+      renderApp(state);
+      break;
+    case "toggle-panel-collapse":
+      setPanelCollapsed(state, target.dataset.panelId, !state.ui.panels?.[target.dataset.panelId]?.collapsed);
+      renderApp(state);
       break;
     case "show-track":
       openPanel("mission-sources");
@@ -110,7 +107,7 @@ function handleAction(action, target) {
       break;
     case "clear-inspect":
       state.time.inspect = null;
-      renderSidebar(state);
+      renderApp(state);
       break;
     default:
       console.info(`UI action not implemented yet: ${action}`);
@@ -136,22 +133,16 @@ function bindEvents() {
     if (!(target instanceof HTMLSelectElement || target instanceof HTMLInputElement)) return;
     if (target.id === "route-source") {
       updateSelection(state, "routeSource", target.value);
-      renderSelectors(state);
-      renderSidebar(state);
+      renderApp(state);
     } else if (target.id === "current-source") {
       updateSelection(state, "currentSource", target.value);
-      renderSelectors(state);
-      renderSidebar(state);
+      renderApp(state);
     } else if (target.id === "parameter-source") {
       updateSelection(state, "parameterSource", target.value);
-      renderSelectors(state);
-      renderParameters(state);
-      renderSidebar(state);
+      renderApp(state);
     } else if (target.dataset.action === "toggle-panel") {
-      state.ui.panels[target.dataset.panelId] ||= {};
-      state.ui.panels[target.dataset.panelId].collapsed = !target.checked;
-      renderSidebar(state);
-      applyWorkspacePanelVisibility(state);
+      setPanelCollapsed(state, target.dataset.panelId, !target.checked);
+      renderApp(state);
     }
   });
 }

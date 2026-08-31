@@ -2,11 +2,59 @@
   "defaultOpen": [],
   "importantOpen": ["overview", "mission-sources"],
   "panels": [
-    {"id": "overview", "label": "Overview Status", "defaultCollapsed": true},
-    {"id": "source-registry", "label": "Source Registry", "defaultCollapsed": true},
-    {"id": "mission-sources", "label": "Mission Sources", "defaultCollapsed": true},
-    {"id": "mode-segments", "label": "Mode Segments", "defaultCollapsed": true},
-    {"id": "parameters", "label": "Parameters", "defaultCollapsed": true},
-    {"id": "signal-catalog", "label": "Signal Catalog", "defaultCollapsed": true}
+    {
+      "id": "overview",
+      "label": "Overview Status",
+      "description": "Dataset, firmware, profile, source and warning summary.",
+      "kind": "overview",
+      "priority": 10,
+      "defaultCollapsed": true,
+      "tags": ["schema", "status"]
+    },
+    {
+      "id": "source-registry",
+      "label": "Source Registry",
+      "description": "All available and derived data sources.",
+      "kind": "legacy-source-registry",
+      "priority": 50,
+      "defaultCollapsed": true,
+      "tags": ["sources"]
+    },
+    {
+      "id": "mission-sources",
+      "label": "Mission Sources",
+      "description": "Route and current-task source candidates.",
+      "kind": "legacy-mission-sources",
+      "priority": 40,
+      "defaultCollapsed": true,
+      "tags": ["mission", "manual-first"]
+    },
+    {
+      "id": "mode-segments",
+      "label": "Mode Segments",
+      "description": "Flight mode timeline segments.",
+      "kind": "legacy-mode-segments",
+      "priority": 60,
+      "defaultCollapsed": true,
+      "tags": ["modes"]
+    },
+    {
+      "id": "parameters",
+      "label": "Parameters",
+      "description": "Parameter source summary and sample values.",
+      "kind": "legacy-parameters",
+      "priority": 70,
+      "defaultCollapsed": true,
+      "tags": ["params"]
+    },
+    {
+      "id": "signal-catalog",
+      "label": "Signal Catalog",
+      "description": "Decoded signal catalog and numeric field list.",
+      "kind": "legacy-signal-catalog",
+      "priority": 80,
+      "defaultCollapsed": true,
+      "tags": ["signals"]
+    }
   ]
 }
