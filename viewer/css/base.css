@@ -558,6 +558,7 @@ code {
 }
 
 .track-plot svg {
+  cursor: grab;
   display: block;
   width: 100%;
   min-height: 34rem;
@@ -583,6 +584,16 @@ code {
   fill: none;
   stroke: var(--ui-border-subtle);
   stroke-width: 1;
+}
+
+.track-hit-point {
+  cursor: crosshair;
+  fill: transparent;
+  pointer-events: all;
+}
+
+.waypoint-marker {
+  cursor: pointer;
 }
 
 .actual-track-line {

@@ -246,10 +246,13 @@ function renderTrack2dPlot(state, context) {
   const trackPath = visibleTrack.length > 1 ? svgPath(visibleTrack, projection.projectPoint) : "";
   const currentSeq = context.currentTask?.seq;
   const highlighted = state.track.highlightedTask;
+  const view = state.track.view2d || { x: 0, y: 0, width: projection.width, height: projection.height };
+  const viewBox = `${fmt(view.x, 3)} ${fmt(view.y, 3)} ${fmt(view.width, 3)} ${fmt(view.height, 3)}`;
+  const trackHitPoints = decimate(visibleTrack, 260);
 
   return `
     <figure class="track-plot">
-      <svg viewBox="0 0 ${projection.width} ${projection.height}" role="img" aria-label="2D flight track plot">
+      <svg data-track-plot="2d" data-default-viewbox="0 0 ${projection.width} ${projection.height}" viewBox="${viewBox}" role="img" aria-label="2D flight track plot">
         <defs>
           <pattern id="track-grid" width="50" height="50" patternUnits="userSpaceOnUse">
             <path d="M 50 0 L 0 0 0 50" class="track-grid-line"></path>
@@ -264,11 +267,15 @@ function renderTrack2dPlot(state, context) {
         </g>
         ${routePath ? `<path d="${routePath}" class="route-line"></path>` : ""}
         ${trackPath ? `<path d="${trackPath}" class="actual-track-line"></path>` : ""}
+        ${trackHitPoints.map((point) => {
+          const p = projection.projectPoint(point);
+          return `<circle class="track-hit-point" data-action="select-track-time" data-time-s="${escapeHtml(point.time_s ?? "")}" cx="${fmt(p.x, 1)}" cy="${fmt(p.y, 1)}" r="9"></circle>`;
+        }).join("")}
         ${routeItems.map((item) => {
           const p = projection.projectPoint(item);
           const active = item.seq === currentSeq || (highlighted?.sourceId === item.source_id && Number(highlighted?.seq) === Number(item.seq));
           return `
-            <g class="waypoint-marker ${active ? "active" : ""}" data-seq="${escapeHtml(item.seq)}">
+            <g class="waypoint-marker ${active ? "active" : ""}" data-action="select-task" data-source-id="${escapeHtml(item.source_id || context.routeSource?.id || "")}" data-task-seq="${escapeHtml(item.seq)}" data-time-s="${escapeHtml(item.time_s ?? "")}" data-seq="${escapeHtml(item.seq)}">
               <circle cx="${fmt(p.x, 1)}" cy="${fmt(p.y, 1)}" r="${active ? 9 : 6}"></circle>
               <text x="${fmt(p.x + 10, 1)}" y="${fmt(p.y - 8, 1)}">#${escapeHtml(item.seq)}</text>
             </g>
@@ -624,6 +631,9 @@ function renderTrackControls(state) {
 function renderTaskList(state, context) {
   const currentSeq = context.currentTask?.seq;
   const highlighted = state.track.highlightedTask;
+  const view = state.track.view2d || { x: 0, y: 0, width: projection.width, height: projection.height };
+  const viewBox = `${fmt(view.x, 3)} ${fmt(view.y, 3)} ${fmt(view.width, 3)} ${fmt(view.height, 3)}`;
+  const trackHitPoints = decimate(visibleTrack, 260);
   return `
     <div class="task-list ${state.track.showTaskList ? "" : "is-hidden"}">
       ${context.routeItems.map((item) => {

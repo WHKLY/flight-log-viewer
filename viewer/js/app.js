@@ -8,6 +8,7 @@ import {
   collapseAllPanels,
   createInitialState,
   expandImportantPanels,
+  resetTrackView2d,
   resetUiLayout,
   setFontScale,
   setPanelCollapsed,
@@ -16,6 +17,7 @@ import {
   setTrackHighlightedTask,
   setTrackMarkerTime,
   setTrackOption,
+  setTrackView2d,
   toggleSidebarCollapsed,
   toggleSidebarSection,
   toggleTrackOption,
@@ -29,6 +31,8 @@ import {
 } from "./ui/render.mjs";
 
 const state = createInitialState();
+const activePlotPointers = new Map();
+let plotGesture = null;
 
 function applyUiState() {
   const theme = state.config?.themes?.[state.ui.theme];
@@ -110,6 +114,125 @@ function selectTask(target) {
   }
 }
 
+function parseViewBox(value) {
+  const [x, y, width, height] = String(value || "").split(/\s+/).map(Number);
+  if ([x, y, width, height].every(Number.isFinite) && width > 1 && height > 1) {
+    return { x, y, width, height };
+  }
+  return { x: 0, y: 0, width: 1000, height: 680 };
+}
+
+function plotViewBox(svg) {
+  return state.track.view2d || parseViewBox(svg?.dataset?.defaultViewbox) || parseViewBox(svg?.getAttribute("viewBox"));
+}
+
+function setLivePlotViewBox(svg, viewBox) {
+  setTrackView2d(state, viewBox);
+  svg.setAttribute("viewBox", `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+}
+
+function clampZoom(defaultView, next) {
+  const minWidth = defaultView.width / 40;
+  const maxWidth = defaultView.width * 5;
+  const width = Math.min(Math.max(next.width, minWidth), maxWidth);
+  const ratio = width / next.width;
+  return {
+    x: next.x + ((next.width - width) / 2),
+    y: next.y + ((next.height - next.height * ratio) / 2),
+    width,
+    height: next.height * ratio,
+  };
+}
+
+function svgPoint(svg, event) {
+  const rect = svg.getBoundingClientRect();
+  const view = plotViewBox(svg);
+  return {
+    x: view.x + ((event.clientX - rect.left) / rect.width) * view.width,
+    y: view.y + ((event.clientY - rect.top) / rect.height) * view.height,
+  };
+}
+
+function zoomPlot(svg, clientX, clientY, factor) {
+  const rect = svg.getBoundingClientRect();
+  const view = plotViewBox(svg);
+  const defaultView = parseViewBox(svg.dataset.defaultViewbox);
+  const focalX = view.x + ((clientX - rect.left) / rect.width) * view.width;
+  const focalY = view.y + ((clientY - rect.top) / rect.height) * view.height;
+  const next = {
+    x: focalX - (focalX - view.x) * factor,
+    y: focalY - (focalY - view.y) * factor,
+    width: view.width * factor,
+    height: view.height * factor,
+  };
+  setLivePlotViewBox(svg, clampZoom(defaultView, next));
+}
+
+function distance(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+function midpoint(a, b) {
+  return { clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 };
+}
+
+function handlePlotPointerDown(event) {
+  const svg = event.target.closest?.('[data-track-plot="2d"]');
+  if (!svg) return;
+  activePlotPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+  svg.setPointerCapture?.(event.pointerId);
+  if (activePlotPointers.size === 2) {
+    const [a, b] = [...activePlotPointers.values()];
+    plotGesture = {
+      svg,
+      mode: "pinch",
+      distance: distance(a, b),
+      viewBox: plotViewBox(svg),
+    };
+  } else {
+    plotGesture = {
+      svg,
+      mode: "pan",
+      pointerId: event.pointerId,
+      start: { clientX: event.clientX, clientY: event.clientY },
+      last: { clientX: event.clientX, clientY: event.clientY },
+      moved: false,
+    };
+  }
+}
+
+function handlePlotPointerMove(event) {
+  if (!plotGesture || !activePlotPointers.has(event.pointerId)) return;
+  const svg = plotGesture.svg;
+  activePlotPointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+
+  if (plotGesture.mode === "pinch" && activePlotPointers.size >= 2) {
+    const [a, b] = [...activePlotPointers.values()];
+    const nextDistance = Math.max(distance(a, b), 1);
+    const factor = plotGesture.distance / nextDistance;
+    const mid = midpoint(a, b);
+    zoomPlot(svg, mid.clientX, mid.clientY, factor);
+    plotGesture.distance = nextDistance;
+    return;
+  }
+
+  if (plotGesture.mode !== "pan" || plotGesture.pointerId !== event.pointerId) return;
+  const rect = svg.getBoundingClientRect();
+  const view = plotViewBox(svg);
+  const dx = (plotGesture.last.clientX - event.clientX) * (view.width / rect.width);
+  const dy = (plotGesture.last.clientY - event.clientY) * (view.height / rect.height);
+  if (Math.abs(event.clientX - plotGesture.start.clientX) + Math.abs(event.clientY - plotGesture.start.clientY) > 4) {
+    plotGesture.moved = true;
+  }
+  setLivePlotViewBox(svg, { ...view, x: view.x + dx, y: view.y + dy });
+  plotGesture.last = { clientX: event.clientX, clientY: event.clientY };
+}
+
+function handlePlotPointerEnd(event) {
+  activePlotPointers.delete(event.pointerId);
+  if (activePlotPointers.size === 0) plotGesture = null;
+}
+
 function handleAction(action, target) {
   switch (action) {
     case "reload":
@@ -155,6 +278,7 @@ function handleAction(action, target) {
       break;
     case "set-track-path-scope":
       setTrackOption(state, "pathScope", target.dataset.value);
+      resetTrackView2d(state);
       renderApp(state);
       break;
     case "set-track-speed":
@@ -163,14 +287,27 @@ function handleAction(action, target) {
       break;
     case "toggle-track-option":
       toggleTrackOption(state, target.dataset.trackOption);
+      resetTrackView2d(state);
       renderApp(state);
       break;
     case "select-task":
       selectTask(target);
       renderApp(state);
       break;
+    case "select-track-time":
+      if (finite(target.dataset.timeS)) {
+        setTrackMarkerTime(state, target.dataset.timeS);
+        renderApp(state);
+      }
+      break;
     case "send-plot-timeref":
       setPlotTimeref(state, state.track.markerTime);
+      renderApp(state);
+      break;
+    case "track-fit":
+    case "track-fit-window":
+    case "track-fit-route":
+      resetTrackView2d(state);
       renderApp(state);
       break;
     case "track-play":
@@ -241,6 +378,7 @@ function bindEvents() {
     if (!(target instanceof HTMLSelectElement || target instanceof HTMLInputElement)) return;
     if (target.id === "route-source" || target.id === "track-route-source") {
       updateSelection(state, "routeSource", target.value);
+      resetTrackView2d(state);
       renderApp(state);
     } else if (target.id === "current-source" || target.id === "track-current-source") {
       updateSelection(state, "currentSource", target.value);
@@ -253,6 +391,18 @@ function bindEvents() {
       renderApp(state);
     }
   });
+
+  document.addEventListener("wheel", (event) => {
+    const svg = event.target.closest?.('[data-track-plot="2d"]');
+    if (!svg) return;
+    event.preventDefault();
+    zoomPlot(svg, event.clientX, event.clientY, event.deltaY > 0 ? 1.16 : 0.86);
+  }, { passive: false });
+
+  document.addEventListener("pointerdown", handlePlotPointerDown);
+  document.addEventListener("pointermove", handlePlotPointerMove);
+  document.addEventListener("pointerup", handlePlotPointerEnd);
+  document.addEventListener("pointercancel", handlePlotPointerEnd);
 }
 
 bindEvents();

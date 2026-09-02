@@ -33,6 +33,7 @@ export function createInitialState() {
       playbackSpeed: 1,
       cameraMode: "free",
       overheadLock: true,
+      view2d: null,
     },
     plot: {
       timeref: null,
@@ -100,6 +101,7 @@ export function attachData(state, data) {
   state.time.inspect = null;
   state.track.window = { ...fullRange };
   state.track.markerTime = markerTime;
+  state.track.view2d = null;
   state.selection = buildInitialSelection(data, state.selection);
   return state;
 }
@@ -162,6 +164,7 @@ export function resetUiLayout(state) {
   state.ui.sidebar.widthPx = Number(state.config?.layout?.sidebar?.defaultWidthPx) || state.ui.sidebar.widthPx;
   state.ui.sidebar.sections = sidebarSectionState(state.config);
   state.ui.panels = panelState(state.config);
+  state.track.view2d = null;
   return state.ui;
 }
 
@@ -219,6 +222,21 @@ export function setPlotTimeref(state, time) {
   const number = Number(time);
   state.plot.timeref = Number.isFinite(number) ? number : null;
   return state.plot.timeref;
+}
+
+export function setTrackView2d(state, viewBox) {
+  const x = Number(viewBox?.x);
+  const y = Number(viewBox?.y);
+  const width = Number(viewBox?.width);
+  const height = Number(viewBox?.height);
+  if (![x, y, width, height].every(Number.isFinite) || width <= 1 || height <= 1) return state.track.view2d;
+  state.track.view2d = { x, y, width, height };
+  return state.track.view2d;
+}
+
+export function resetTrackView2d(state) {
+  state.track.view2d = null;
+  return state.track.view2d;
 }
 
 export function toggleCollapsed(state, key) {
