@@ -631,9 +631,6 @@ function renderTrackControls(state) {
 function renderTaskList(state, context) {
   const currentSeq = context.currentTask?.seq;
   const highlighted = state.track.highlightedTask;
-  const view = state.track.view2d || { x: 0, y: 0, width: projection.width, height: projection.height };
-  const viewBox = `${fmt(view.x, 3)} ${fmt(view.y, 3)} ${fmt(view.width, 3)} ${fmt(view.height, 3)}`;
-  const trackHitPoints = decimate(visibleTrack, 260);
   return `
     <div class="task-list ${state.track.showTaskList ? "" : "is-hidden"}">
       ${context.routeItems.map((item) => {
