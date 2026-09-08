@@ -524,6 +524,60 @@ Result for this pass:
 - Parameter cards and Inspector formula parameter chips now show source metadata and, for time-aware values, the parameter record time.
 - Flight2 validation: `.param file` option is disabled, DataFlash latest/time-aware are enabled, and DOM smoke confirms layer cards refresh after switching to DataFlash time-aware.
 
+
+## Mission domain schema compatibility v27 plan
+
+Goal: make the main viewer consume the new generated mission domain files directly, while keeping the older `series/mission-sources.json` workflow available.
+
+Implementation for this pass:
+
+- Load `public-data/domains/mission.json` and `public-data/domains/current_tasks.json` before falling back to legacy `public-data/series/mission-sources.json`.
+- Add viewer helpers that understand both legacy `versions/events/items` and new `route_versions/current_events` source shapes.
+- Match old override/source ids such as `onboard_cmd`, `external_wp`, and `tlog_mission` to new suffixed domain ids.
+- Keep auto mission-source selection from accepting incomplete tlog routes when `quality.route_complete=false`.
+- For DataFlash CMD sources, derive current task from timed items in the active route version when available, so dense mission-upload records do not advance the HUD current seq through every waypoint at upload time.
+
+Result for this pass:
+
+- Newly generated `domains/mission.json` data can populate the Mission source dropdown, Track waypoint table, 2D/3D waypoint routes, and Track HUD without requiring `series/mission-sources.json`.
+- The current dataset with two DataFlash route versions selects the complete onboard CMD route instead of the partial tlog route and keeps route geometry time-versioned.
+
+
+## Mission route version visibility v28 plan
+
+Goal: make route-version changes visible during playback and allow each mission route version to be hidden or manually shown.
+
+Implementation for this pass:
+
+- Add route-version display controls with `Current`/`All` view modes and per-version hide toggles.
+- Keep the default `Current` view tied to the playback marker, so advancing into the next route version automatically hides the previous version.
+- Add route-version controls under Mission source showing each version, item count, active state, and hide state.
+- Tag waypoint rows with their route key/label, and draw 2D/3D waypoint polylines per route key so manually showing multiple versions does not connect them into one false route.
+- Restrict current NAV target highlighting to the active route version to avoid duplicate seq numbers across route rewrites.
+
+Result for this pass:
+
+- Playback across the current dataset switches from the 17-item route version to the 12-item route version at `526.283s`; the older version is hidden by default in `Current` view, while `All` view can compare versions.
+- The Track waypoint table now shows route-version labels, making the second route version visible in text as well as geometry.
+
+
+Follow-up repair:
+
+- Route visibility is now separated into `Current`/`All` view mode plus per-route `hide`, so starting playback returns to current-route view instead of preserving a comparison display.
+- Waypoint table clicks now store route key plus waypoint seq, preventing duplicate seq numbers across route rewrites from highlighting the wrong 2D/3D point.
+- Track and HUD readouts include the active route-version label so playback route switches are visible in text.
+
+## Playback route boundary and live DOM repair (2026-09-08)
+
+The v28 playback result above was premature: the actual viewer still fell back to V1 for the final open-ended version. `Number(null)` converted `end_s: null` to zero, so V2 never matched its time interval. Testing a separate model of the visibility rules did not catch this viewer bug.
+
+- Nullable mission times now remain missing until the version resolver assigns unbounded interval limits. The final version is selected from its start onward; null current-seq overrides no longer become waypoint zero.
+- Track controls, route table, 2D/3D routes and HUD resolve from the aircraft marker time. An independently selected Inspector time does not change the Track task readout.
+- Live panels reconcile changed text and attributes in place instead of replacing entire tables, task cards, Inspector trees and parameter cards every frame. Click handlers bind once, retaining scrolling, focus and route-specific waypoint selection. Playback runs one chart refresh per frame.
+- Narrow HUD canvases use a minimum logical drawing width to prevent negative attitude-circle radii. On mobile, HUD and track readout flow below the 3D canvas without covering each other.
+- `node scripts/check_mission_playback.mjs` executes the actual viewer functions for nullable bounds, legacy versions, duplicate seq, visibility, playback and reverse seek. Add `--sample` for the current August 26 generated dataset: V2 begins at `526.282929s`, has 11 drawable rows, and resolves seq 1/6/11 at 530/560/590s.
+- Firefox live-animation checks cover automatic crossing, 2D/3D/table/HUD agreement, stable panel and scroll-container identity, input focus/value retention, same-seq waypoint clicks, manual visibility and reverse seek. Desktop and mobile canvas-pixel checks and screenshots verify rendering.
+
 ## Next direction
 
 The next useful step is source-linked parameter effect inspection: connect selected-time values, logged demands/outputs, and relevant parameters into compact formula/effect cards. This should stay mode-aware and layer-aware so AUTO mission/L1/TECS, stabilization, output, and motion evidence remain separated instead of being mixed into one explanation.

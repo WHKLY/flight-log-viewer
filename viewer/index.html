@@ -890,6 +890,18 @@
           grid-template-columns: 1fr;
         }
 
+        .track-3d-stage .readout {
+          position: static;
+          max-width: none;
+        }
+
+        .track-hud-overlay {
+          position: static;
+          width: 100%;
+          max-width: none;
+          height: 320px;
+        }
+
         .panel + .panel {
           border-left: 0;
           border-top: 1px solid var(--line);
@@ -968,6 +980,7 @@
         hRefs: {},
         timeRefs: [],
         highlightedWaypointIndex: null,
+        highlightedWaypointRouteKey: null,
         trackPathMode: "window",
         trackModeFilter: "all",
         trackShowPath: true,
@@ -984,6 +997,8 @@
         missionOverrideEnd: "",
         missionOverrideSeq: "",
         localMissionOverrideRules: [],
+        missionRouteVisibility: {},
+        missionRouteViewMode: "current",
         inspectorTime: null,
         inspectorCollapsed: false,
         inspectorChainCollapsed: {},
@@ -1002,6 +1017,7 @@
       const charts = new Map();
       let modeData = { segments: [] };
       let missionSourceData = { sources: [] };
+      let currentTaskData = { sources: [] };
       let missionOverrideData = { rules: [] };
       let inspectorContext = null;
 
@@ -1276,26 +1292,162 @@
         return Array.isArray(missionSourceData?.sources) ? missionSourceData.sources : [];
       }
 
+      function currentTaskSources() {
+        return Array.isArray(currentTaskData?.sources) ? currentTaskData.sources : [];
+      }
+
+      function sourceKind(source) {
+        return String(source?.kind || source?.quality?.kind || "");
+      }
+
+      function sourceMatchesId(source, sourceId) {
+        if (!source || !sourceId) return false;
+        const id = String(source.id || "");
+        const wanted = String(sourceId);
+        if (id === wanted) return true;
+        const kind = sourceKind(source);
+        if (wanted === "onboard_cmd") return id.startsWith("onboard_cmd") || kind === "dataflash_cmd" || kind === "logged_route";
+        if (wanted === "external_wp") return id.startsWith("external_wp") || kind === "external_waypoints";
+        if (wanted === "tlog_mission") return id.startsWith("tlog_mission") || kind === "tlog_mission";
+        return false;
+      }
+
       function missionSourceById(sourceId) {
-        return missionSources().find((source) => source.id === sourceId) || null;
+        return missionSources().find((source) => sourceMatchesId(source, sourceId)) || null;
+      }
+
+      function missionSourceVersions(source) {
+        if (Array.isArray(source?.versions)) return source.versions;
+        if (Array.isArray(source?.route_versions)) return source.route_versions;
+        return [];
+      }
+
+      function missionSourceItems(source) {
+        if (Array.isArray(source?.items) && source.items.length) return source.items;
+        const versions = missionSourceVersions(source);
+        for (let index = versions.length - 1; index >= 0; index -= 1) {
+          if (Array.isArray(versions[index]?.items) && versions[index].items.length) return versions[index].items;
+        }
+        return [];
+      }
+
+      function missionRouteKey(source, version, index = 0) {
+        const sourceId = source?.id || "summary";
+        if (!version) return `${sourceId}:static`;
+        const start = missionNumber(version.start_s) !== null ? fmt.format(Number(version.start_s)) : "static";
+        const end = missionNumber(version.end_s) !== null ? fmt.format(Number(version.end_s)) : "end";
+        const count = Array.isArray(version.items) ? version.items.length : 0;
+        return `${sourceId}:v${index}:${start}:${end}:${count}`;
+      }
+
+      function missionRouteEntries(source) {
+        if (!source) return [];
+        const versions = missionSourceVersions(source);
+        if (versions.length) {
+          return versions.map((version, index) => ({
+            source,
+            version,
+            index,
+            key: missionRouteKey(source, version, index),
+            items: Array.isArray(version.items) ? version.items : [],
+          }));
+        }
+        const items = missionSourceItems(source);
+        return items.length ? [{ source, version: null, index: 0, key: missionRouteKey(source, null, 0), items }] : [];
+      }
+
+      function missionRouteEntryAt(source, time) {
+        const entries = missionRouteEntries(source);
+        if (!entries.length) return null;
+        const version = missionVersionAt(source, time);
+        if (version) return entries.find((entry) => entry.version === version) || entries[0];
+        return entries[0];
+      }
+
+      function missionRouteLabel(entry) {
+        if (!entry) return "route missing";
+        const count = Array.isArray(entry.items) ? entry.items.length : 0;
+        if (!entry.version) return `static route (${count})`;
+        const start = missionNumber(entry.version.start_s) !== null ? `${fmt.format(Number(entry.version.start_s))}s` : "static";
+        const end = missionNumber(entry.version.end_s) !== null ? `${fmt.format(Number(entry.version.end_s))}s` : "end";
+        return `V${entry.index + 1} ${start}..${end} (${count})`;
+      }
+
+      function missionRouteVisibilityMode(entry) {
+        return state.missionRouteVisibility?.[entry?.key] || "auto";
+      }
+
+      function missionRouteVisible(entry, activeKey) {
+        const mode = missionRouteVisibilityMode(entry);
+        if (mode === "hide") return false;
+        if (state.missionRouteViewMode === "all") return true;
+        return entry?.key === activeKey;
+      }
+
+      function visibleMissionRouteEntries(source, time) {
+        const active = missionRouteEntryAt(source, time);
+        const activeKey = active?.key || null;
+        return missionRouteEntries(source).filter((entry) => missionRouteVisible(entry, activeKey));
+      }
+
+      function missionRouteReadout(time = trackMarkerTime()) {
+        const source = selectedMissionSource(time);
+        const active = missionRouteEntryAt(source, time);
+        const visible = visibleMissionRouteEntries(source, time);
+        return active ? `${missionRouteLabel(active)} | ${state.missionRouteViewMode} | visible ${visible.length}` : "route missing";
+      }
+
+      function missionWaypointRowsForEntry(entry, activeKey) {
+        return (entry?.items || [])
+          .map((item) => ({ ...waypointRowFromMissionItem(item), _routeKey: entry.key, _routeLabel: missionRouteLabel(entry), _routeActive: entry.key === activeKey }))
+          .filter((row) => validGeo(Number(row.lat), Number(row.lon)));
+      }
+
+      function currentTaskSourceForMission(source) {
+        if (!source) return null;
+        return currentTaskSources().find((taskSource) => sourceMatchesId(taskSource, source.id)) || null;
+      }
+
+      function missionSourceEvents(source) {
+        if (Array.isArray(source?.events) && source.events.length) return source.events;
+        const taskSource = currentTaskSourceForMission(source);
+        if (Array.isArray(taskSource?.events) && taskSource.events.length) return taskSource.events;
+        if (Array.isArray(source?.current_events) && source.current_events.length) return source.current_events;
+        return [];
       }
 
       function sourceHasItems(source) {
-        return Array.isArray(source?.items) && source.items.length > 0;
+        return missionSourceItems(source).length > 0;
+      }
+
+      function isTlogMissionSource(source) {
+        const id = String(source?.id || "");
+        return id === "tlog_mission" || id.startsWith("tlog_mission") || sourceKind(source) === "tlog_mission";
+      }
+
+      function isOnboardMissionSource(source) {
+        const id = String(source?.id || "");
+        const kind = sourceKind(source);
+        return id === "onboard_cmd" || id.startsWith("onboard_cmd") || kind === "dataflash_cmd" || kind === "logged_route";
+      }
+
+      function isExternalWaypointSource(source) {
+        const id = String(source?.id || "");
+        return id === "external_wp" || id.startsWith("external_wp") || sourceKind(source) === "external_waypoints";
       }
 
       function tlogRouteComplete(source) {
-        if (!source || source.id !== "tlog_mission" || !sourceHasItems(source)) return false;
-        if (!Array.isArray(source.events) || !source.events.length) return false;
+        if (!source || !isTlogMissionSource(source) || !sourceHasItems(source)) return false;
+        if (!missionSourceEvents(source).length) return false;
         return source.quality?.route_complete !== false;
       }
 
       function autoMissionSource() {
         const sources = missionSources();
         const completeTlog = sources.find((source) => tlogRouteComplete(source));
-        const onboard = sources.find((source) => source.id === "onboard_cmd" && sourceHasItems(source));
-        const external = sources.find((source) => source.id === "external_wp" && sourceHasItems(source));
-        const partialTlog = sources.find((source) => source.id === "tlog_mission" && sourceHasItems(source));
+        const onboard = sources.find((source) => isOnboardMissionSource(source) && sourceHasItems(source));
+        const external = sources.find((source) => isExternalWaypointSource(source) && sourceHasItems(source));
+        const partialTlog = sources.find((source) => isTlogMissionSource(source) && sourceHasItems(source));
         return completeTlog || onboard || external || partialTlog || null;
       }
 
@@ -1317,32 +1469,44 @@
         return autoMissionSource();
       }
 
+      function missionNumber(value) {
+        return value === null || value === undefined || value === "" || !finite(Number(value)) ? null : Number(value);
+      }
+
       function missionVersionAt(source, time) {
-        const versions = Array.isArray(source?.versions) ? source.versions : [];
-        if (!versions.length || !finite(Number(time))) return null;
+        const versions = missionSourceVersions(source);
+        if (!versions.length || missionNumber(time) === null) return null;
         let selected = null;
         for (const version of versions) {
-          const start = Number(version.start_s);
-          const end = finite(Number(version.end_s)) ? Number(version.end_s) : Infinity;
-          if (finite(start) && time >= start && time < end) selected = version;
-          if (finite(start) && start > time) break;
+          const start = missionNumber(version.start_s) ?? -Infinity;
+          const end = missionNumber(version.end_s) ?? Infinity;
+          if (time >= start && time < end) selected = version;
+          if (start > time) break;
         }
         return selected || versions.find((version) => Array.isArray(version.items) && version.items.length) || null;
       }
 
       function missionItemsAt(source, time) {
         const version = missionVersionAt(source, time);
-        return Array.isArray(version?.items) && version.items.length ? version.items : (source?.items || []);
+        return Array.isArray(version?.items) && version.items.length ? version.items : missionSourceItems(source);
       }
 
       function missionItemBySeq(source, seq, time = trackMarkerTime()) {
-        if (!source || !finite(Number(seq))) return null;
+        if (!source || missionNumber(seq) === null) return null;
         return missionItemsAt(source, time).find((item) => Number(item.seq) === Number(seq)) || null;
       }
 
+      function missionVersionTimedItems(source, time) {
+        const version = missionVersionAt(source, time);
+        const items = Array.isArray(version?.items) ? version.items : [];
+        return items.filter((item) => missionNumber(item.time_s) !== null);
+      }
+
       function previousMissionEvent(source, time) {
-        const events = (source?.events || []).filter((event) => finite(Number(event.time_s))).sort((a, b) => Number(a.time_s) - Number(b.time_s));
-        return previousRow(events, time);
+        const versionItems = missionVersionTimedItems(source, time);
+        const rawEvents = missionSourceEvents(source).filter((event) => missionNumber(event.time_s) !== null);
+        const events = isOnboardMissionSource(source) && versionItems.length ? versionItems : rawEvents;
+        return previousRow(events.sort((a, b) => Number(a.time_s) - Number(b.time_s)), time);
       }
 
       function missionInfoAt(time) {
@@ -1351,14 +1515,16 @@
         const source = selectedMissionSource(time);
         const sourceId = source?.id || "missing";
         const sourceLabel = source?.label || "missing";
-        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive", source: sourceLabel, source_id: sourceId };
-        if (!source) return { status: "missing", label: "no mission source", detail: "missing", source: "missing", source_id: "missing" };
+        const activeRoute = missionRouteEntryAt(source, time);
+        const routeLabel = activeRoute ? missionRouteLabel(activeRoute) : "route missing";
+        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive", source: sourceLabel, source_id: sourceId, route: routeLabel };
+        if (!source) return { status: "missing", label: "no mission source", detail: "missing", source: "missing", source_id: "missing", route: routeLabel };
 
-        let seq = finite(Number(rule?.seq)) ? Number(rule.seq) : null;
+        let seq = missionNumber(rule?.seq);
         let event = null;
         if (seq === null) {
           event = previousMissionEvent(source, time);
-          if (event && finite(Number(event.seq))) seq = Number(event.seq);
+          if (event) seq = missionNumber(event.seq);
         }
         const item = seq === null ? null : missionItemBySeq(source, seq, time);
         const used = item || event;
@@ -1369,6 +1535,7 @@
             detail: rule ? `manual source override ${Number(rule.start_s).toFixed(1)}s..${Number(rule.end_s).toFixed(1)}s` : "no timed current item",
             source: sourceLabel,
             source_id: sourceId,
+            route: routeLabel,
             seq: null,
           };
         }
@@ -1389,6 +1556,7 @@
           params: Array.isArray(used.params) ? used.params.map((value, index) => `P${index + 1}=${fmt.format(value)}`).join(" ") : "",
           source: sourceLabel,
           source_id: sourceId,
+          route: routeLabel,
           seq,
           override: rule || null,
         };
@@ -1414,14 +1582,22 @@
 
       function activeMissionWaypointRows(time = trackMarkerTime()) {
         const source = selectedMissionSource(time);
-        const rows = missionItemsAt(source, time).map(waypointRowFromMissionItem).filter((row) => validGeo(Number(row.lat), Number(row.lon)));
-        return rows.length ? rows : (inspectorContext?.summary?.waypoints || []);
+        const active = missionRouteEntryAt(source, time);
+        const visibleEntries = visibleMissionRouteEntries(source, time);
+        const rows = visibleEntries.flatMap((entry) => missionWaypointRowsForEntry(entry, active?.key || null));
+        if (rows.length || active) return rows;
+        return inspectorContext?.summary?.waypoints || [];
       }
 
       function currentNavigationSeq(time = trackMarkerTime()) {
         const info = missionInfoAt(time);
-        const seq = Number(info.seq);
-        return finite(seq) ? seq : null;
+        return missionNumber(info.seq);
+      }
+
+      function waypointHighlightMatches(row) {
+        if (Number(row?.index) !== state.highlightedWaypointIndex) return false;
+        const routeKey = row?._routeKey || "";
+        return state.highlightedWaypointRouteKey ? routeKey === state.highlightedWaypointRouteKey : true;
       }
 
       function trackWaypointPanelHtml(time = trackMarkerTime()) {
@@ -1430,12 +1606,15 @@
         const currentSeq = currentNavigationSeq(time);
         const rows = activeMissionWaypointRows(time);
         const sourceLabel = source?.label || "summary waypoint fallback";
-        const versionText = version ? `version ${fmt.format(version.start_s)}s${finite(Number(version.end_s)) ? ".." + fmt.format(version.end_s) + "s" : "..end"}` : "static route";
+        const activeRoute = missionRouteEntryAt(source, time);
+        const visibleRoutes = visibleMissionRouteEntries(source, time);
+        const routeText = activeRoute ? `${missionRouteLabel(activeRoute)} | visible routes ${visibleRoutes.length}` : (version ? `version ${fmt.format(version.start_s)}s${missionNumber(version.end_s) !== null ? ".." + fmt.format(version.end_s) + "s" : "..end"}` : "static route");
         return `<div id="track-waypoint-panel">
-          <div class="note">${escapeHtml(sourceLabel)} | ${escapeHtml(versionText)} | current seq ${currentSeq === null ? "missing" : escapeHtml(currentSeq)}</div>
+          <div class="note">${escapeHtml(sourceLabel)} | ${escapeHtml(routeText)} | current seq ${currentSeq === null ? "missing" : escapeHtml(currentSeq)}</div>
           <div class="table-scroll">${table(rows, [
-            { key: "index", label: "#", html: (row) => `${Number(row.index) === currentSeq ? statusPill("direct") : ""}${escapeHtml(row.index ?? "")}` },
-            { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${state.highlightedWaypointIndex === row.index ? "active" : ""}" data-wp-index="${row.index}">${escapeHtml(row.command_name)}</button>` },
+            { key: "_routeLabel", label: "Route", html: (row) => `${row._routeActive ? statusPill("direct") : ""}${escapeHtml(row._routeLabel || "summary")}` },
+            { key: "index", label: "#", html: (row) => `${row._routeActive && Number(row.index) === currentSeq ? statusPill("direct") : ""}${escapeHtml(row.index ?? "")}` },
+            { key: "command_name", label: "Command", html: (row) => `<button class="wp-button ${waypointHighlightMatches(row) ? "active" : ""}" data-wp-index="${escapeHtml(row.index)}" data-wp-route-key="${escapeHtml(row._routeKey || "")}">${escapeHtml(row.command_name)}</button>` },
             { key: "lat", label: "Lat", format: (value) => fmt.format(value) },
             { key: "lon", label: "Lon", format: (value) => fmt.format(value) },
             { key: "alt", label: "Alt", format: (value) => fmt.format(value) },
@@ -1462,19 +1641,44 @@
         for (const source of missionSources()) {
           const disabled = sourceHasItems(source) ? "" : " disabled";
           const selected = state.missionSourceMode === source.id ? " selected" : "";
-          options.push(`<option value="${escapeHtml(source.id)}"${selected}${disabled}>${escapeHtml(source.label)} (${source.items?.length || 0})</option>`);
+          options.push(`<option value="${escapeHtml(source.id)}"${selected}${disabled}>${escapeHtml(source.label)} (${missionSourceItems(source).length || 0})</option>`);
         }
         return options.join("");
       }
 
-      function renderMissionTaskCard(time = currentMissionDisplayTime()) {
+      function nextMissionRouteVisibilityMode(current) {
+        return current === "hide" ? "auto" : "hide";
+      }
+
+      function missionRouteControlsHtml(time = trackMarkerTime()) {
+        const source = selectedMissionSource(time);
+        const entries = missionRouteEntries(source);
+        if (!entries.length) return `<div class="note">route versions missing</div>`;
+        const active = missionRouteEntryAt(source, time);
+        const activeKey = active?.key || null;
+        const buttons = entries.map((entry) => {
+          const mode = missionRouteVisibilityMode(entry);
+          const visible = missionRouteVisible(entry, activeKey);
+          const stateText = mode === "hide" ? "hidden" : visible ? "visible" : "auto hidden";
+          const activeClass = entry.key === activeKey ? " active" : "";
+          return `<button class="${activeClass}" data-mission-route-visibility="${escapeHtml(entry.key)}" title="click toggles hide / auto">${escapeHtml(missionRouteLabel(entry))} | ${escapeHtml(stateText)}</button>`;
+        }).join("");
+        const modeButtons = [["current", "Current"], ["all", "All"]]
+          .map(([mode, label]) => `<button class="${state.missionRouteViewMode === mode ? "active" : ""}" data-mission-route-view="${mode}">${label}</button>`)
+          .join("");
+        return `<div class="track-section-title"><strong>Route versions</strong><span class="range-text">active ${escapeHtml(active ? missionRouteLabel(active) : "none")}</span></div><div class="track-button-row mission-route-row">${modeButtons}${buttons}</div>`;
+      }
+
+      function renderMissionTaskCard(time = trackMarkerTime()) {
         const info = missionInfoAt(time);
         const rules = allMissionOverrideRules();
         const override = missionOverrideAt(time);
+        const route = missionRouteEntryAt(selectedMissionSource(time), time);
         return `<div class="mission-task-card">
           <div class="kv-grid">
             <div class="kv"><span>task time</span><strong>${fmt.format(time)}s</strong></div>
             <div class="kv"><span>source</span><strong>${escapeHtml(info.source || "missing")}</strong></div>
+            <div class="kv"><span>route</span><strong>${escapeHtml(route ? missionRouteLabel(route) : "missing")}</strong></div>
             <div class="kv"><span>current task</span><strong>${escapeHtml(info.label)} ${statusPill(info.status)}</strong></div>
             <div class="kv"><span>target</span><strong title="${escapeHtml(info.params || "")}">${escapeHtml(info.detail || "")}</strong></div>
           </div>
@@ -1487,6 +1691,7 @@
             <button id="mission-add-override">添加覆盖</button>
             <button id="mission-clear-local-overrides">清除本机覆盖</button>
           </div>
+          ${missionRouteControlsHtml(time)}
           <div class="note">${override ? `active override: ${fmt.format(override.start_s)}s..${fmt.format(override.end_s)}s source=${escapeHtml(override.source_id || "?")} seq=${escapeHtml(override.seq ?? "source only")}` : "no active manual override"} | local rules ${state.localMissionOverrideRules.length} | file rules ${(missionOverrideData?.rules || []).length}</div>
         </div>`;
       }
@@ -1672,6 +1877,57 @@
         return `<h3>Key params</h3><div class="param-card" data-layer-params="${escapeHtml(layerKey)}"><div class="note">Parameter source: ${escapeHtml(parameterSourceLabel())}${state.parameterSourceMode === "dataflash_time" ? ` | time ${fmt.format(time)}s` : ""}</div>${body}</div>`;
       }
 
+      const renderedHtml = new WeakMap();
+      const boundLiveButtons = new WeakSet();
+
+      // Preserve scroll containers, focus and listeners while live values change.
+      function syncRenderedNode(node, next) {
+        if (node.nodeType !== next.nodeType || node.nodeName !== next.nodeName) {
+          node.replaceWith(next.cloneNode(true));
+          return;
+        }
+        if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.COMMENT_NODE) {
+          if (node.nodeValue !== next.nodeValue) node.nodeValue = next.nodeValue;
+          return;
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          for (const attr of [...node.attributes]) {
+            if (!next.hasAttribute(attr.name)) node.removeAttribute(attr.name);
+          }
+          for (const attr of next.attributes) {
+            if (attr.name === "value" && node === document.activeElement) continue;
+            if (node.getAttribute(attr.name) !== attr.value) node.setAttribute(attr.name, attr.value);
+          }
+        }
+        syncRenderedChildren(node, next);
+      }
+
+      function syncRenderedChildren(node, next) {
+        const children = [...node.childNodes];
+        const desired = [...next.childNodes];
+        for (let index = 0; index < Math.max(children.length, desired.length); index += 1) {
+          if (!desired[index]) children[index].remove();
+          else if (!children[index]) node.appendChild(desired[index].cloneNode(true));
+          else syncRenderedNode(children[index], desired[index]);
+        }
+      }
+
+      function updateRenderedHtml(node, html, outer = false) {
+        if (!node || renderedHtml.get(node) === html) return false;
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        if (outer) syncRenderedNode(node, template.content.firstElementChild);
+        else syncRenderedChildren(node, template.content);
+        renderedHtml.set(node, html);
+        return true;
+      }
+
+      function bindLiveButton(button, listener) {
+        if (!button || boundLiveButtons.has(button)) return;
+        boundLiveButtons.add(button);
+        button.addEventListener("click", listener);
+      }
+
       function updateLayerParamCards() {
         document.querySelectorAll("[data-layer-params]").forEach((node) => {
           const layerKey = node.dataset.layerParams;
@@ -1679,7 +1935,7 @@
           const wrapper = document.createElement("div");
           wrapper.innerHTML = html;
           const next = wrapper.querySelector("[data-layer-params]");
-          if (next) node.replaceWith(next);
+          if (next) syncRenderedNode(node, next);
         });
       }
 
@@ -1723,19 +1979,19 @@
 
       function bindInspectorButtons() {
         document.querySelectorAll("[data-toggle-inspector]").forEach((button) => {
-          button.addEventListener("click", () => {
+          bindLiveButton(button, () => {
             state.inspectorCollapsed = !state.inspectorCollapsed;
             renderInspector();
           });
         });
         document.querySelectorAll("[data-toggle-inspector-chain]").forEach((button) => {
-          button.addEventListener("click", () => {
+          bindLiveButton(button, () => {
             const key = button.dataset.toggleInspectorChain;
             state.inspectorChainCollapsed[key] = !state.inspectorChainCollapsed[key];
             renderInspector();
           });
         });
-        document.querySelector("#clear-inspect-inline")?.addEventListener("click", clearInspect);
+        bindLiveButton(document.querySelector("#clear-inspect-inline"), clearInspect);
       }
 
       function fontScaleLabel() {
@@ -1761,20 +2017,20 @@
         const node = document.querySelector("#time-inspector");
         if (!node) return;
         if (!inspectorContext) {
-          node.innerHTML = "";
+          updateRenderedHtml(node, "");
           return;
         }
         const collapsedClass = state.inspectorCollapsed ? " inspector-collapsed" : "";
         const time = state.inspectorTime;
         if (!finite(time)) {
-          node.innerHTML = `<div class="inspector${collapsedClass}"><div class="inspector-card"><div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button data-toggle-inspector>${inspectorToggleLabel()}</button></div></div><div class="inspector-body"><p>点击图像上的时间点开始检查。</p></div></div></div>`;
+          updateRenderedHtml(node, `<div class="inspector${collapsedClass}"><div class="inspector-card"><div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button data-toggle-inspector>${inspectorToggleLabel()}</button></div></div><div class="inspector-body"><p>点击图像上的时间点开始检查。</p></div></div></div>`);
           bindInspectorButtons();
           return;
         }
         const mode = findModeAt(time);
         const mission = missionInfoAt(time);
         const modeText = mode ? `${mode.name} ${fmt.format(mode.start_s)}..${fmt.format(mode.end_s)}s` : "unknown";
-        node.innerHTML = `<div class="inspector${collapsedClass}">
+        updateRenderedHtml(node, `<div class="inspector${collapsedClass}">
           <div class="inspector-card">
             <div class="inspector-head"><h3>Inspector</h3><div class="inspector-actions"><button data-toggle-inspector>${inspectorToggleLabel()}</button><button id="clear-inspect-inline">Clear inspect</button></div></div>
             <div class="inspector-body"><div class="kv-grid">
@@ -1787,7 +2043,7 @@
             </div></div>
           </div>
           <div class="inspector-body">${controlChains.map((chain, index) => renderInspectorChain(chain, index, time)).join("")}</div>
-        </div>`;
+        </div>`);
         bindInspectorButtons();
       }
 
@@ -1997,7 +2253,6 @@
         const bounds = trackMarkerBounds();
         state.trackMarkerTime = clamp(Number(time), bounds.start, bounds.end);
         if (syncInspector) syncTrackInspector(state.trackMarkerTime);
-        updateTrackControls();
         renderAllCharts();
       }
 
@@ -2022,13 +2277,11 @@
           state.trackPlaying = false;
           state.trackPlaybackLastMs = null;
           state.trackPlaybackFrame = null;
-          updateTrackControls();
           renderAllCharts();
           return;
         }
         state.trackMarkerTime = next;
         syncTrackInspector(state.trackMarkerTime);
-        updateTrackControls();
         renderAllCharts();
         state.trackPlaybackFrame = requestAnimationFrame(trackPlaybackStep);
       }
@@ -2036,6 +2289,7 @@
       function startTrackPlayback() {
         const bounds = trackMarkerBounds();
         if (trackMarkerTime() >= bounds.end) state.trackMarkerTime = bounds.start;
+        state.missionRouteViewMode = "current";
         state.trackPlaying = true;
         state.trackPlaybackLastMs = null;
         if (state.trackPlaybackFrame) cancelAnimationFrame(state.trackPlaybackFrame);
@@ -2048,8 +2302,7 @@
         else startTrackPlayback();
       }
 
-      function missionStatusStripHtml() {
-        const time = currentMissionDisplayTime();
+      function missionStatusStripHtml(time = trackMarkerTime()) {
         const mode = findModeAt(time);
         const mission = missionInfoAt(time);
         const modeText = mode ? `${mode.name} ${fmt.format(mode.start_s)}..${fmt.format(mode.end_s)}s` : "mode missing";
@@ -2173,15 +2426,11 @@
           hudButton.textContent = state.trackHudVisible ? "隐藏 HUD" : "显示 HUD";
           hudButton.classList.toggle("active", state.trackHudVisible);
         }
-        const missionStrip = document.querySelector(".mission-status-strip");
-        if (missionStrip) missionStrip.outerHTML = missionStatusStripHtml();
-        const waypointPanel = document.querySelector("#track-waypoint-panel");
-        if (waypointPanel) {
-          waypointPanel.outerHTML = trackWaypointPanelHtml();
+        updateRenderedHtml(document.querySelector(".mission-status-strip"), missionStatusStripHtml(marker), true);
+        if (updateRenderedHtml(document.querySelector("#track-waypoint-panel"), trackWaypointPanelHtml(marker), true)) {
           bindWaypointButtons();
         }
-        const missionTask = document.querySelector(".mission-task-card");
-        if (missionTask) missionTask.outerHTML = renderMissionTaskCard();
+        updateRenderedHtml(document.querySelector(".mission-task-card"), renderMissionTaskCard(marker), true);
         const sourceSelect = document.querySelector("#mission-source-mode");
         if (sourceSelect && document.activeElement !== sourceSelect) sourceSelect.value = state.missionSourceMode;
         const startInput = document.querySelector("#mission-override-start");
@@ -2273,6 +2522,22 @@
             }
             state.track3dView.pitch = constrainTrack3dPitch(state.track3dView.pitch);
             if (state.track3dOverheadLock) state.track3dView.pitch = snapLockedTrack3dPitch(state.track3dView.pitch);
+            renderAllCharts();
+            return;
+          }
+
+          if (button.dataset.missionRouteView) {
+            state.missionRouteViewMode = button.dataset.missionRouteView === "all" ? "all" : "current";
+            renderAllCharts();
+            return;
+          }
+
+          if (button.dataset.missionRouteVisibility) {
+            const key = button.dataset.missionRouteVisibility;
+            const current = state.missionRouteVisibility[key] || "auto";
+            const next = nextMissionRouteVisibilityMode(current);
+            if (next === "auto") delete state.missionRouteVisibility[key];
+            else state.missionRouteVisibility[key] = next;
             renderAllCharts();
             return;
           }
@@ -3102,6 +3367,25 @@
         }
       }
 
+      function routePointGroups(points) {
+        const groups = [];
+        const byKey = new Map();
+        for (const point of points) {
+          const key = point.row?._routeKey || "route";
+          if (!byKey.has(key)) {
+            const group = [];
+            byKey.set(key, group);
+            groups.push(group);
+          }
+          byKey.get(key).push(point);
+        }
+        return groups;
+      }
+
+      function drawProjectedRouteLines(ctx, points, config, plot, strokeStyle, lineWidth) {
+        for (const group of routePointGroups(points)) drawProjectedLine(ctx, group, config, plot, strokeStyle, lineWidth);
+      }
+
       function drawTrack3dGroundDrops(ctx, points, groundZ, config, plot) {
         const visible = downsample(points, 180);
         if (!visible.length || !finite(groundZ)) return;
@@ -3328,7 +3612,7 @@
 
         if (state.trackShowPath) drawTrack3dGroundDrops(ctx, flownPoints, gridZ, config, plot);
         drawTrack3dAxes(ctx, config, plot, center, gridSize, gridZ, groundExtent);
-        if (state.trackShowWaypoints) drawProjectedLine(ctx, wpPoints, config, plot, colors.gold, 1.3);
+        if (state.trackShowWaypoints) drawProjectedRouteLines(ctx, wpPoints, config, plot, colors.gold, 1.3);
         if (state.trackShowPath) drawProjectedLine(ctx, posPoints, config, plot, colors.green, 2.4, true);
 
         if (state.trackShowWaypoints) {
@@ -3340,7 +3624,7 @@
             ctx.fill();
           });
 
-          const currentTarget = wpPoints.find((point) => Number(point.row?.index) === currentSeq);
+          const currentTarget = wpPoints.find((point) => point.row?._routeActive && Number(point.row?.index) === currentSeq);
           if (currentTarget) {
             const screen = track3dProject(currentTarget, config, plot);
             ctx.strokeStyle = "#ff4dff";
@@ -3352,7 +3636,7 @@
             ctx.fillText(`NAV #${currentTarget.row.index}`, screen.x + 14, screen.y + 14);
           }
 
-          const highlighted = wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex);
+          const highlighted = wpPoints.find((point) => waypointHighlightMatches(point.row));
           if (highlighted) {
             const screen = track3dProject(highlighted, config, plot);
             ctx.strokeStyle = colors.red;
@@ -3372,7 +3656,7 @@
         ctx.font = canvasFont(12);
         ctx.fillText(`yaw ${fmt.format((config.view.yaw * 180) / Math.PI)} deg | pitch ${fmt.format((config.view.pitch * 180) / Math.PI)} deg`, plot.left, height - 8);
         const attitudeText = attitude ? ` | ATT Roll/Pitch/Yaw ${fmt.format(attitude.Roll)}/${fmt.format(attitude.Pitch)}/${fmt.format(attitude.Yaw)}` : " | ATT missing";
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | Camera ${track3dViewModeLabel(state.track3dViewMode)} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Route ${missionRouteReadout(markerTime)} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | Camera ${track3dViewModeLabel(state.track3dViewMode)} | 3D POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | Alt: ${config.altitudeSource || "missing"}${attitudeText}`;
       }
 
       function drawTrack2dCompass(ctx, plot) {
@@ -3463,12 +3747,14 @@
         if (state.trackShowWaypoints) {
           ctx.strokeStyle = colors.gold;
           ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          wpPoints.forEach((point, index) => {
-            if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
-            else ctx.lineTo(sx(point.x), sy(point.y));
-          });
-          ctx.stroke();
+          for (const group of routePointGroups(wpPoints)) {
+            ctx.beginPath();
+            group.forEach((point, index) => {
+              if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+              else ctx.lineTo(sx(point.x), sy(point.y));
+            });
+            ctx.stroke();
+          }
         }
 
         const posLinePoints = downsample(posPoints);
@@ -3498,8 +3784,8 @@
             ctx.fill();
           });
         }
-        const currentTarget = state.trackShowWaypoints ? wpPoints.find((point) => Number(point.row?.index) === currentSeq) : null;
-        const highlighted = state.trackShowWaypoints ? wpPoints.find((point) => Number(point.row?.index) === state.highlightedWaypointIndex) : null;
+        const currentTarget = state.trackShowWaypoints ? wpPoints.find((point) => point.row?._routeActive && Number(point.row?.index) === currentSeq) : null;
+        const highlighted = state.trackShowWaypoints ? wpPoints.find((point) => waypointHighlightMatches(point.row)) : null;
         if (currentTarget) {
           const tx = sx(currentTarget.x);
           const ty = sy(currentTarget.y);
@@ -3540,7 +3826,7 @@
         ctx.fillStyle = "#607068";
         ctx.font = canvasFont(12);
         ctx.fillText(`grid ${fmt.format(gridStep)} m`, plot.left, height - 8);
-        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
+        document.querySelector(`#${config.id}-readout`).textContent = `${state.trackPathMode === "full" ? "Full" : "Window"} ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter} | Route ${missionRouteReadout(markerTime)} | Path ${state.trackShowPath ? "on" : "off"} | WP ${state.trackShowWaypoints ? "on" : "off"} | POS: ${posPoints.length} | Plane ${fmt.format(markerTime)}s | 航点: ${wpPoints.length}${omittedWaypoints ? `, 过滤 ${omittedWaypoints} 个无效/远端点` : ""} | 等比例 ${fmt.format(config.mapView.metersPerPx)} m/px`;
       }
 
       function renderLegend(config) {
@@ -3622,11 +3908,14 @@
         const time = trackMarkerTime();
         const source = selectedMissionSource(time);
         const version = missionVersionAt(source, time);
+        const activeRoute = missionRouteEntryAt(source, time);
         const rows = activeMissionWaypointRows(time);
-        const rowKey = rows.map((row) => `${row.index}:${row.lat}:${row.lon}:${row.alt}`).join(";");
-        const routeKey = `${source?.id || "summary"}:${version?.start_s ?? "static"}:${version?.end_s ?? "end"}:${rowKey}`;
+        const rowKey = rows.map((row) => `${row._routeKey || "summary"}:${row.index}:${row.lat}:${row.lon}:${row.alt}`).join(";");
+        const visibilityKey = Object.entries(state.missionRouteVisibility || {}).map(([key, value]) => `${key}=${value}`).join(";");
+        const routeKey = `${source?.id || "summary"}:${version?.start_s ?? "static"}:${version?.end_s ?? "end"}:${visibilityKey}:${rowKey}`;
         if (config.routeSourceKey === routeKey) return;
         config.routeSourceKey = routeKey;
+        config.activeRouteKey = activeRoute?.key || null;
         config.waypointRows = rows;
         config.projected = null;
         config.projected3d = null;
@@ -3993,10 +4282,11 @@
 
       function bindWaypointButtons() {
         document.querySelectorAll("[data-wp-index]").forEach((button) => {
-          button.addEventListener("click", () => {
+          bindLiveButton(button, () => {
             state.highlightedWaypointIndex = Number(button.dataset.wpIndex);
+            state.highlightedWaypointRouteKey = button.dataset.wpRouteKey || "";
             document.querySelectorAll("[data-wp-index]").forEach((item) => {
-              item.classList.toggle("active", Number(item.dataset.wpIndex) === state.highlightedWaypointIndex);
+              item.classList.toggle("active", Number(item.dataset.wpIndex) === state.highlightedWaypointIndex && (state.highlightedWaypointRouteKey ? item.dataset.wpRouteKey === state.highlightedWaypointRouteKey : true));
             });
             renderAllCharts();
           });
@@ -4029,10 +4319,12 @@
           loadJsonOptional("../public-data/series/io.json"),
           loadJsonOptional("../public-data/series/events.json"),
           loadJsonOptional("../public-data/series/modes.json"),
+          loadJsonOptional("../public-data/domains/mission.json"),
+          loadJsonOptional("../public-data/domains/current_tasks.json"),
           loadJsonOptional("../public-data/series/mission-sources.json"),
           loadJsonOptional("../project-data/mission-overrides.json"),
         ]);
-        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw, missionSourcesRaw, missionOverridesRaw] = loaded;
+        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw, missionDomainRaw, currentTasksRaw, missionSourcesRaw, missionOverridesRaw] = loaded;
         const summary = summaryRaw || defaultSummary();
         const manifest = manifestRaw || defaultManifest();
         const track = withMessages(trackRaw, ["POS", "GPS"]);
@@ -4045,7 +4337,8 @@
         const io = withMessages(ioRaw, ["RCOU", "RCIN"]);
         const events = withMessages(eventsRaw, ["MODE", "MSG"]);
         const modes = modesRaw || { compatibility: manifest.compatibility, mode_map_source: manifest.compatibility.mode_map_source, mode_map: {}, segments: [], focus_ranges: {} };
-        const missionSources = missionSourcesRaw || { schema_version: 1, sources: [] };
+        const missionSources = missionDomainRaw || missionSourcesRaw || { schema_version: 1, sources: [] };
+        const currentTasks = currentTasksRaw || { schema_version: 1, sources: [] };
         const missionOverrides = missionOverridesRaw || { schema_version: 1, rules: [] };
         const missing = [
           ["dataset-summary", summaryRaw],
@@ -4060,10 +4353,11 @@
           ["io", ioRaw],
           ["events", eventsRaw],
           ["modes", modesRaw],
-          ["mission-sources", missionSourcesRaw],
+          ["mission-sources", missionDomainRaw || missionSourcesRaw],
         ].filter(([, value]) => !value).map(([name]) => name);
         modeData = modes;
         missionSourceData = missionSources;
+        currentTaskData = currentTasks;
         missionOverrideData = missionOverrides;
         state.localMissionOverrideRules = loadLocalMissionOverrides();
         inspectorContext = {

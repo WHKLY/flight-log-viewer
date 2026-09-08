@@ -14,9 +14,12 @@ build/
 
 # Local data and generated files
 project-data/mission-overrides.json
-data/raw/
+data/*
+!data/README.md
 public-data/*.json
 public-data/series/
+public-data/domains/
+public-data/.build-*/
 docs/source-review/extracted/
 
 # Termux/editor noise

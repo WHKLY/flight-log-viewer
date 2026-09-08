@@ -37,9 +37,10 @@
     const height = Math.max(1, rect.height || 430);
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    return { ctx, width, height };
+    const scale = Math.min(1, width / 320);
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    ctx.clearRect(0, 0, width / scale, height / scale);
+    return { ctx, width: width / scale, height: height / scale };
   }
 
   function roundRect(ctx, x, y, width, height, radius) {
@@ -306,14 +307,16 @@
     ctx.fillStyle = "#eefbf6";
     ctx.font = canvasFont(11);
     ctx.textAlign = "left";
-    ctx.fillText(`${values.modeName || "MODE ?"} | ${mission.label || "mission missing"}`, 14, 22);
+    const leftWidth = (width - 36) * 0.56;
+    const rightWidth = (width - 36) * 0.44;
+    ctx.fillText(`${values.modeName || "MODE ?"} | ${mission.label || "mission missing"}`, 14, 22, leftWidth);
     ctx.fillStyle = mission.override ? MAGENTA : "rgba(238, 251, 246, 0.82)";
-    ctx.fillText(mission.source || "source missing", 14, 40);
+    ctx.fillText(mission.route || mission.source || "source missing", 14, 40, leftWidth);
     ctx.textAlign = "right";
     ctx.fillStyle = MAGENTA;
-    ctx.fillText(`T SPD ${hudNumber(values.targetSpeed, 1)}  ALT ${hudNumber(values.targetAltitude, 0)}`, width - 14, 22);
+    ctx.fillText(`T SPD ${hudNumber(values.targetSpeed, 1)}  ALT ${hudNumber(values.targetAltitude, 0)}`, width - 14, 22, rightWidth);
     ctx.fillStyle = NAV_BLUE;
-    ctx.fillText(`NAV R ${hudNumber(values.navRoll, 1)}  P ${hudNumber(values.navPitch, 1)}`, width - 14, 40);
+    ctx.fillText(`NAV R ${hudNumber(values.navRoll, 1)}  P ${hudNumber(values.navPitch, 1)}`, width - 14, 40, rightWidth);
     ctx.restore();
   }
 
