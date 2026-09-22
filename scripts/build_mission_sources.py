@@ -362,7 +362,9 @@ def waypoint_item(row: dict[str, Any], source: str) -> dict[str, Any]:
     }
 
 
-def cmd_item(row: dict[str, Any], index: int) -> dict[str, Any]:
+def dataflash_mission_item(
+    row: dict[str, Any], index: int, source: str = "onboard_cmd"
+) -> dict[str, Any]:
     seq_value = finite_number(row.get("CNum"))
     command_value = finite_number(row.get("CId"))
     seq = int(seq_value) if seq_value is not None else index
@@ -385,8 +387,16 @@ def cmd_item(row: dict[str, Any], index: int) -> dict[str, Any]:
         "lon": finite_number(row.get("Lng")),
         "alt": finite_number(row.get("Alt")),
         "time_s": finite_number(row.get("time_s")),
-        "source": "onboard_cmd",
+        "source": source,
     }
+
+
+def cmd_item(row: dict[str, Any], index: int) -> dict[str, Any]:
+    return dataflash_mission_item(row, index, "onboard_cmd")
+
+
+def mise_event(row: dict[str, Any], index: int) -> dict[str, Any]:
+    return dataflash_mission_item(row, index, "onboard_mise")
 
 
 def latest_items_by_seq(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -476,15 +486,20 @@ def build_sources(summary: dict[str, Any], mission: dict[str, Any], tlog_mission
             }
         )
 
-    cmd_rows = ((mission.get("messages") or {}).get("CMD") or [])
+    mission_messages = mission.get("messages") or {}
+    cmd_rows = mission_messages.get("CMD") or []
+    mise_rows = mission_messages.get("MISE") or []
     if cmd_rows:
         versions = cmd_route_versions(cmd_rows)
         items = dedupe_cmd_items(cmd_rows)
+        event_rows = mise_rows or cmd_rows
+        event_mapper = mise_event if mise_rows else cmd_item
         quality = source_quality(items, "logged_route") | {
             "version_count": len(versions),
             "complete_version_count": len([version for version in versions if version.get("complete")]),
             "latest_total": versions[-1].get("total") if versions else None,
             "route_complete": bool(versions and versions[-1].get("complete")),
+            "event_count": len(event_rows),
         }
         sources.append(
             {
@@ -495,7 +510,8 @@ def build_sources(summary: dict[str, Any], mission: dict[str, Any], tlog_mission
                 "items": items,
                 "versions": versions,
                 "quality": quality,
-                "events": [cmd_item(row, index) for index, row in enumerate(cmd_rows)],
+                "event_source": "MISE" if mise_rows else "CMD",
+                "events": [event_mapper(row, index) for index, row in enumerate(event_rows)],
             }
         )
 

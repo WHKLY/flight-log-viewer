@@ -4,8 +4,10 @@ import vm from "node:vm";
 
 // Execute the viewer's own functions; no duplicated route-selection algorithm.
 const html = readFileSync(new URL("../viewer/index.html", import.meta.url), "utf8");
+const missionPlaybackScript = readFileSync(new URL("../viewer/js/mission-playback.js", import.meta.url), "utf8");
 const inline = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const context = vm.createContext({ window: {}, assert, console });
+vm.runInContext(missionPlaybackScript, context);
 vm.runInContext(inline.slice(0, inline.lastIndexOf("      main().catch")), context);
 vm.runInContext(`
   const item = (seq, time_s, lat) => ({ seq, time_s, command: 16, lat, lon: 120, alt: 50 });
@@ -47,6 +49,42 @@ vm.runInContext(`
   assert.equal(activeMissionWaypointRows(240).length, 0);
   state.missionRouteVisibility = {};
 
+  // ArduPilot 4.7 logs CMD as one route snapshot, while MISE carries runtime progress.
+  // Explicit events must win over the snapshot item timestamps or seq 14 stays selected.
+  const v47Items = [
+    item(1, 593.014949, 30),
+    item(10, 593.015044, 31),
+    { ...item(14, 593.015074, 32), command: 21 },
+  ];
+  const v47Source = {
+    id: 'onboard_cmd',
+    kind: 'logged_route',
+    label: 'DataFlash CMD accepted mission',
+    items: v47Items,
+    versions: [{ start_s: 593.014949, end_s: null, items: v47Items }],
+    events: [
+      { time_s: 650.933923, seq: 1, command: 22 },
+      { time_s: 684.394731, seq: 10, command: 16 },
+      { time_s: 711.994863, seq: 14, command: 21 },
+    ],
+  };
+  missionSourceData = { sources: [v47Source] };
+  modeData = { segments: [{ name: 'AUTO', start_s: 640, end_s: 730 }] };
+  assert.equal(currentNavigationSeq(651.933975), 1);
+  assert.equal(currentNavigationSeq(684.8839545), 10);
+  assert.equal(currentNavigationSeq(717.833934), 14);
+  assert.equal(missionInfoAt(684.8839545).label, 'NAV_WAYPOINT #10');
+
+  // Keep accepting the old source.events shape used for CMD-derived progress.
+  v47Source.events = [
+    { time_s: 650, seq: 1, command: 22 },
+    { time_s: 680, seq: 10, command: 16 },
+  ];
+  assert.equal(currentNavigationSeq(681), 10);
+
+  missionSourceData = { sources: [source] };
+  modeData = { segments: [{ name: 'AUTO', start_s: 100, end_s: 300 }] };
+
   // Exercise the actual playback step and chart-route synchronization.
   let refreshes = 0;
   const config2d = { type: 'track' }, config3d = { type: 'track3d' };
@@ -72,7 +110,7 @@ vm.runInContext(`
   assert.equal(config2d.activeRouteKey, entries[0].key);
   stopTrackPlayback();
 `, context);
-console.log("PASS: nullable version bounds, legacy schema, current seq, duplicate-seq highlights, route visibility, playback and reverse seek");
+console.log("PASS: route versions, legacy schema, explicit event priority, current seq, route visibility, playback and reverse seek");
 
 if (process.argv.includes("--sample")) {
   for (const [key, path] of Object.entries({

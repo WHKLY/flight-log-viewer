@@ -5,7 +5,7 @@ The viewer must separate flight-mode authority from mission-task identity. `AUTO
 ## Source Types
 
 - `external_wp`: mission items parsed from the external Mission Planner/QGC `.waypoints` file. This is useful for planned-route comparison, but it may be stale when an onboard computer rewrites the mission in flight.
-- `onboard_cmd`: mission items reconstructed from DataFlash `CMD` records. This is closer to what the flight controller accepted/executed, but it depends on which command records are present in the log.
+- `onboard_cmd`: the accepted onboard route is reconstructed from DataFlash `CMD` records. On newer firmware, runtime current-item changes come from `MISE`; older logs without `MISE` keep the legacy `CMD` event fallback. Keeping route definition and execution events separate prevents a startup route snapshot from being mistaken for a sequence of task transitions.
 - `tlog_mission`: reserved for MAVLink `.tlog` mission reconstruction from `MISSION_ITEM_INT`/`MISSION_ITEM` plus current-item history from `MISSION_CURRENT`/`MISSION_ITEM_REACHED`. This can be incomplete when the ground station link drops.
 
 ## Selection Priority

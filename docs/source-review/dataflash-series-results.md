@@ -35,7 +35,7 @@ public-data/series/modes.json
 | Group | Messages | Viewer use |
 | --- | --- | --- |
 | `track` | `POS`, `GPS` | 2D/3D path, speed, position, altitude. |
-| `mission` | `CMD`, `MAVC`, `EV`, `TERR`, `ORGN` | Mission task context and events. |
+| `mission` | `CMD`, `MISE`, `MAVC`, `EV`, `TERR`, `ORGN` | Mission route snapshots, runtime task changes, and related context. |
 | `attitude` | `ATT`, `AHR2`, `XKQ` | Actual/demanded attitude and orientation evidence. |
 | `navigation` | `CTUN`, `NTUN` | L1/navigation demand and cross-track/bearing evidence. |
 | `tecs` | `TECS`, `TEC2`, `ARSP` | Energy-control speed/height/pitch/throttle evidence. |

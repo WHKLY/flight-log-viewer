@@ -127,6 +127,7 @@ Use this quick release check after changes:
 
 ```bash
 python3 -m py_compile start.py scripts/extract_dataflash_series.py scripts/inspect_logs.py scripts/summarize_dataset.py scripts/build_mission_sources.py
+python3 -m unittest tests.test_mission_pipeline
 python3 scripts/check_launcher.py
 node scripts/check_mission_playback.mjs
 python3 -c "from html.parser import HTMLParser; from pathlib import Path; HTMLParser().feed(Path('viewer/index.html').read_text()); print('viewer html ok')"
@@ -144,6 +145,7 @@ Current sample log firmware: `ArduPlane V4.4.4 (16b78382)`.
 Interpretation references: Plane 4.7 documents plus local ArduPilot source `master` at `381357f8`. These versions are not identical, so the viewer follows this rule:
 
 - Parse DataFlash fields from the log's own `FMT` records.
+- Treat `CMD` as the onboard route snapshot and prefer `MISE` for runtime current-item events on newer firmware; logs without `MISE` retain the legacy `CMD` event fallback.
 - Show missing fields as missing instead of guessing.
 - Treat mode, mission, navigation, TECS, stabilization, output, and motion as separate control layers.
 - Use `.param` values as aircraft truth, while parameter explanations must state their documentation/source basis.

@@ -57,6 +57,7 @@ Writes `public-data/series/*.json`.
 Main responsibilities:
 
 - Decode selected DataFlash messages using the log's embedded `FMT` schema.
+- Keep `CMD` route snapshots separate from `MISE` runtime mission-item events, with a `CMD` event fallback for older logs.
 - Produce grouped series files for track, mission, attitude, navigation, TECS, PID, motion, I/O, events, and modes.
 - Write compatibility metadata such as log firmware, parser source, mode map source, and explanation source.
 - Emit empty groups when source data is missing so partial datasets remain viewable.
@@ -67,7 +68,7 @@ The viewer is organized by control layer rather than raw message name:
 
 | Layer | Main data | Purpose |
 | --- | --- | --- |
-| Flight Mode / Mission | `MODE`, `CMD`, `MAVC`, `MSG` | Identify who has control and which mission task is active. |
+| Flight Mode / Mission | `MODE`, `CMD`, `MISE`, `MAVC`, `MSG` | Identify who has control, reconstruct the route from `CMD`, and follow runtime mission-item changes from `MISE`. |
 | Track / Geometry | `POS`, `GPS`, waypoints, `ATT` | 2D equal-scale path, 3D path, aircraft marker, HUD. |
 | L1 Navigation | `CTUN`, `NTUN` | Cross-track, bearings, final navigation roll/pitch/heading demands. |
 | TECS Energy | `TECS`, `TEC2`, `ARSP` | Speed, altitude, pitch, throttle energy-control behavior. |

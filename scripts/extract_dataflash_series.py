@@ -35,6 +35,7 @@ TARGET_MESSAGES = {
     "MODE",
     "MSG",
     "CMD",
+    "MISE",
     "MAVC",
     "EV",
     "TERR",
@@ -77,7 +78,7 @@ TARGET_MESSAGES = {
 
 SERIES_GROUPS = {
     "track": ["POS", "GPS"],
-    "mission": ["CMD", "MAVC", "EV", "TERR", "ORGN"],
+    "mission": ["CMD", "MISE", "MAVC", "EV", "TERR", "ORGN"],
     "attitude": ["ATT", "AHR2", "XKQ"],
     "navigation": ["CTUN", "NTUN"],
     "tecs": ["TECS", "TEC2", "ARSP"],

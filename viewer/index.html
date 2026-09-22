@@ -932,6 +932,7 @@
       </section>
     </main>
 
+    <script src="js/mission-playback.js"></script>
     <script src="js/track-camera.js"></script>
     <script src="js/track-hud.js"></script>
     <script>
@@ -951,7 +952,7 @@
         "XKF0", "XKF1", "XKF2", "XKF3", "XKF4", "XKF5", "XKFD", "XKFM", "XKFS", "XKT", "XKTV", "XKV1", "XKV2", "XKY0", "XKY1",
         "NKF0", "NKF1", "NKF2", "NKF3", "NKF4", "NKF5",
       ];
-      const missionMessageNames = ["CMD", "MAVC", "EV", "TERR", "ORGN"];
+      const missionMessageNames = ["CMD", "MISE", "MAVC", "EV", "TERR", "ORGN"];
       const mavCmdNames = {
         16: "NAV_WAYPOINT",
         17: "NAV_LOITER_UNLIM",
@@ -1288,89 +1289,43 @@
         }
       }
 
+      let missionPlaybackCache = null;
+
+      function missionPlaybackModel() {
+        const cacheKey = [missionSourceData, currentTaskData, missionOverrideData, state.localMissionOverrideRules, state.missionSourceMode];
+        if (missionPlaybackCache?.key.every((value, index) => value === cacheKey[index])) return missionPlaybackCache.model;
+        const model = MissionPlayback.createModel({
+          missionData: missionSourceData,
+          currentTaskData,
+          overrideData: missionOverrideData,
+          localOverrideRules: state.localMissionOverrideRules,
+          sourceMode: state.missionSourceMode,
+          formatNumber: (value) => fmt.format(value),
+          commandName,
+          validGeo,
+        });
+        missionPlaybackCache = { key: cacheKey, model };
+        return model;
+      }
+
       function missionSources() {
-        return Array.isArray(missionSourceData?.sources) ? missionSourceData.sources : [];
-      }
-
-      function currentTaskSources() {
-        return Array.isArray(currentTaskData?.sources) ? currentTaskData.sources : [];
-      }
-
-      function sourceKind(source) {
-        return String(source?.kind || source?.quality?.kind || "");
-      }
-
-      function sourceMatchesId(source, sourceId) {
-        if (!source || !sourceId) return false;
-        const id = String(source.id || "");
-        const wanted = String(sourceId);
-        if (id === wanted) return true;
-        const kind = sourceKind(source);
-        if (wanted === "onboard_cmd") return id.startsWith("onboard_cmd") || kind === "dataflash_cmd" || kind === "logged_route";
-        if (wanted === "external_wp") return id.startsWith("external_wp") || kind === "external_waypoints";
-        if (wanted === "tlog_mission") return id.startsWith("tlog_mission") || kind === "tlog_mission";
-        return false;
-      }
-
-      function missionSourceById(sourceId) {
-        return missionSources().find((source) => sourceMatchesId(source, sourceId)) || null;
-      }
-
-      function missionSourceVersions(source) {
-        if (Array.isArray(source?.versions)) return source.versions;
-        if (Array.isArray(source?.route_versions)) return source.route_versions;
-        return [];
+        return missionPlaybackModel().sources;
       }
 
       function missionSourceItems(source) {
-        if (Array.isArray(source?.items) && source.items.length) return source.items;
-        const versions = missionSourceVersions(source);
-        for (let index = versions.length - 1; index >= 0; index -= 1) {
-          if (Array.isArray(versions[index]?.items) && versions[index].items.length) return versions[index].items;
-        }
-        return [];
-      }
-
-      function missionRouteKey(source, version, index = 0) {
-        const sourceId = source?.id || "summary";
-        if (!version) return `${sourceId}:static`;
-        const start = missionNumber(version.start_s) !== null ? fmt.format(Number(version.start_s)) : "static";
-        const end = missionNumber(version.end_s) !== null ? fmt.format(Number(version.end_s)) : "end";
-        const count = Array.isArray(version.items) ? version.items.length : 0;
-        return `${sourceId}:v${index}:${start}:${end}:${count}`;
+        return missionPlaybackModel().source.items(source);
       }
 
       function missionRouteEntries(source) {
-        if (!source) return [];
-        const versions = missionSourceVersions(source);
-        if (versions.length) {
-          return versions.map((version, index) => ({
-            source,
-            version,
-            index,
-            key: missionRouteKey(source, version, index),
-            items: Array.isArray(version.items) ? version.items : [],
-          }));
-        }
-        const items = missionSourceItems(source);
-        return items.length ? [{ source, version: null, index: 0, key: missionRouteKey(source, null, 0), items }] : [];
+        return missionPlaybackModel().route.entries(source);
       }
 
       function missionRouteEntryAt(source, time) {
-        const entries = missionRouteEntries(source);
-        if (!entries.length) return null;
-        const version = missionVersionAt(source, time);
-        if (version) return entries.find((entry) => entry.version === version) || entries[0];
-        return entries[0];
+        return missionPlaybackModel().route.at(source, time);
       }
 
       function missionRouteLabel(entry) {
-        if (!entry) return "route missing";
-        const count = Array.isArray(entry.items) ? entry.items.length : 0;
-        if (!entry.version) return `static route (${count})`;
-        const start = missionNumber(entry.version.start_s) !== null ? `${fmt.format(Number(entry.version.start_s))}s` : "static";
-        const end = missionNumber(entry.version.end_s) !== null ? `${fmt.format(Number(entry.version.end_s))}s` : "end";
-        return `V${entry.index + 1} ${start}..${end} (${count})`;
+        return missionPlaybackModel().route.label(entry);
       }
 
       function missionRouteVisibilityMode(entry) {
@@ -1403,163 +1358,40 @@
           .filter((row) => validGeo(Number(row.lat), Number(row.lon)));
       }
 
-      function currentTaskSourceForMission(source) {
-        if (!source) return null;
-        return currentTaskSources().find((taskSource) => sourceMatchesId(taskSource, source.id)) || null;
-      }
-
-      function missionSourceEvents(source) {
-        if (Array.isArray(source?.events) && source.events.length) return source.events;
-        const taskSource = currentTaskSourceForMission(source);
-        if (Array.isArray(taskSource?.events) && taskSource.events.length) return taskSource.events;
-        if (Array.isArray(source?.current_events) && source.current_events.length) return source.current_events;
-        return [];
-      }
-
       function sourceHasItems(source) {
-        return missionSourceItems(source).length > 0;
-      }
-
-      function isTlogMissionSource(source) {
-        const id = String(source?.id || "");
-        return id === "tlog_mission" || id.startsWith("tlog_mission") || sourceKind(source) === "tlog_mission";
-      }
-
-      function isOnboardMissionSource(source) {
-        const id = String(source?.id || "");
-        const kind = sourceKind(source);
-        return id === "onboard_cmd" || id.startsWith("onboard_cmd") || kind === "dataflash_cmd" || kind === "logged_route";
-      }
-
-      function isExternalWaypointSource(source) {
-        const id = String(source?.id || "");
-        return id === "external_wp" || id.startsWith("external_wp") || sourceKind(source) === "external_waypoints";
-      }
-
-      function tlogRouteComplete(source) {
-        if (!source || !isTlogMissionSource(source) || !sourceHasItems(source)) return false;
-        if (!missionSourceEvents(source).length) return false;
-        return source.quality?.route_complete !== false;
+        return missionPlaybackModel().source.hasItems(source);
       }
 
       function autoMissionSource() {
-        const sources = missionSources();
-        const completeTlog = sources.find((source) => tlogRouteComplete(source));
-        const onboard = sources.find((source) => isOnboardMissionSource(source) && sourceHasItems(source));
-        const external = sources.find((source) => isExternalWaypointSource(source) && sourceHasItems(source));
-        const partialTlog = sources.find((source) => isTlogMissionSource(source) && sourceHasItems(source));
-        return completeTlog || onboard || external || partialTlog || null;
+        return missionPlaybackModel().selection.auto();
       }
 
       function allMissionOverrideRules() {
-        return [...(missionOverrideData?.rules || []), ...state.localMissionOverrideRules]
-          .filter((rule) => finite(Number(rule.start_s)) && finite(Number(rule.end_s)) && Number(rule.end_s) >= Number(rule.start_s));
+        return missionPlaybackModel().selection.rules();
       }
 
       function missionOverrideAt(time) {
-        if (!finite(time)) return null;
-        const matches = allMissionOverrideRules().filter((rule) => time >= Number(rule.start_s) && time <= Number(rule.end_s));
-        return matches.length ? matches[matches.length - 1] : null;
+        return missionPlaybackModel().selection.overrideAt(time);
       }
 
       function selectedMissionSource(time = trackMarkerTime()) {
-        const rule = missionOverrideAt(time);
-        if (rule?.source_id) return missionSourceById(rule.source_id) || autoMissionSource();
-        if (state.missionSourceMode && state.missionSourceMode !== "auto") return missionSourceById(state.missionSourceMode) || autoMissionSource();
-        return autoMissionSource();
+        return missionPlaybackModel().selection.sourceAt(time);
       }
 
       function missionNumber(value) {
-        return value === null || value === undefined || value === "" || !finite(Number(value)) ? null : Number(value);
+        return MissionPlayback.missionNumber(value);
       }
 
       function missionVersionAt(source, time) {
-        const versions = missionSourceVersions(source);
-        if (!versions.length || missionNumber(time) === null) return null;
-        let selected = null;
-        for (const version of versions) {
-          const start = missionNumber(version.start_s) ?? -Infinity;
-          const end = missionNumber(version.end_s) ?? Infinity;
-          if (time >= start && time < end) selected = version;
-          if (start > time) break;
-        }
-        return selected || versions.find((version) => Array.isArray(version.items) && version.items.length) || null;
-      }
-
-      function missionItemsAt(source, time) {
-        const version = missionVersionAt(source, time);
-        return Array.isArray(version?.items) && version.items.length ? version.items : missionSourceItems(source);
+        return missionPlaybackModel().route.versionAt(source, time);
       }
 
       function missionItemBySeq(source, seq, time = trackMarkerTime()) {
-        if (!source || missionNumber(seq) === null) return null;
-        return missionItemsAt(source, time).find((item) => Number(item.seq) === Number(seq)) || null;
-      }
-
-      function missionVersionTimedItems(source, time) {
-        const version = missionVersionAt(source, time);
-        const items = Array.isArray(version?.items) ? version.items : [];
-        return items.filter((item) => missionNumber(item.time_s) !== null);
-      }
-
-      function previousMissionEvent(source, time) {
-        const versionItems = missionVersionTimedItems(source, time);
-        const rawEvents = missionSourceEvents(source).filter((event) => missionNumber(event.time_s) !== null);
-        const events = isOnboardMissionSource(source) && versionItems.length ? versionItems : rawEvents;
-        return previousRow(events.sort((a, b) => Number(a.time_s) - Number(b.time_s)), time);
+        return missionPlaybackModel().route.itemBySeq(source, seq, time);
       }
 
       function missionInfoAt(time) {
-        const mode = findModeAt(time);
-        const rule = missionOverrideAt(time);
-        const source = selectedMissionSource(time);
-        const sourceId = source?.id || "missing";
-        const sourceLabel = source?.label || "missing";
-        const activeRoute = missionRouteEntryAt(source, time);
-        const routeLabel = activeRoute ? missionRouteLabel(activeRoute) : "route missing";
-        if (!mode || mode.name !== "AUTO") return { status: "missing", label: "not AUTO", detail: "mission inactive", source: sourceLabel, source_id: sourceId, route: routeLabel };
-        if (!source) return { status: "missing", label: "no mission source", detail: "missing", source: "missing", source_id: "missing", route: routeLabel };
-
-        let seq = missionNumber(rule?.seq);
-        let event = null;
-        if (seq === null) {
-          event = previousMissionEvent(source, time);
-          if (event) seq = missionNumber(event.seq);
-        }
-        const item = seq === null ? null : missionItemBySeq(source, seq, time);
-        const used = item || event;
-        if (!used) {
-          return {
-            status: sourceHasItems(source) ? "derived" : "missing",
-            label: `${sourceLabel}: seq unknown`,
-            detail: rule ? `manual source override ${Number(rule.start_s).toFixed(1)}s..${Number(rule.end_s).toFixed(1)}s` : "no timed current item",
-            source: sourceLabel,
-            source_id: sourceId,
-            route: routeLabel,
-            seq: null,
-          };
-        }
-
-        const command = used.command ?? used.CId;
-        const commandLabel = used.command_name || commandName(command);
-        const lat = used.lat ?? used.Lat;
-        const lon = used.lon ?? used.Lng;
-        const alt = used.alt ?? used.Alt;
-        const age = event?.time_s !== undefined && finite(Number(event.time_s)) ? Math.max(0, time - Number(event.time_s)) : null;
-        const target = validGeo(Number(lat), Number(lon)) ? `${fmt.format(lat)}, ${fmt.format(lon)}, ${fmt.format(alt)}m` : `alt ${fmt.format(alt)}`;
-        const suffix = rule ? "manual override" : state.missionSourceMode !== "auto" ? "selected source" : "auto source";
-        return {
-          status: rule ? "direct" : event ? "direct" : "derived",
-          label: `${commandLabel} #${finite(Number(seq)) ? Number(seq) : "?"}`,
-          detail: `${target}${age !== null ? ` | age ${fmt.format(age)}s` : ""}`,
-          planned: `${sourceLabel} | ${suffix}`,
-          params: Array.isArray(used.params) ? used.params.map((value, index) => `P${index + 1}=${fmt.format(value)}`).join(" ") : "",
-          source: sourceLabel,
-          source_id: sourceId,
-          route: routeLabel,
-          seq,
-          override: rule || null,
-        };
+        return missionPlaybackModel().taskAt(time, findModeAt(time));
       }
 
       function waypointRowFromMissionItem(item) {
@@ -1590,8 +1422,7 @@
       }
 
       function currentNavigationSeq(time = trackMarkerTime()) {
-        const info = missionInfoAt(time);
-        return missionNumber(info.seq);
+        return missionPlaybackModel().currentSeqAt(time, findModeAt(time));
       }
 
       function waypointHighlightMatches(row) {
@@ -2558,13 +2389,13 @@
             const source = selectedMissionSource(start) || autoMissionSource();
             if (source && finite(start) && finite(end)) {
               const seqValue = Number(state.missionOverrideSeq);
-              state.localMissionOverrideRules.push({
+              state.localMissionOverrideRules = [...state.localMissionOverrideRules, {
                 start_s: start,
                 end_s: end,
                 source_id: source.id,
                 seq: finite(seqValue) ? seqValue : null,
                 label: "viewer local override",
-              });
+              }];
               saveLocalMissionOverrides();
               renderAllCharts();
             }
