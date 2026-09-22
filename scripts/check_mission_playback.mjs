@@ -5,12 +5,21 @@ import vm from "node:vm";
 // Execute the viewer's own functions; no duplicated route-selection algorithm.
 const html = readFileSync(new URL("../viewer/index.html", import.meta.url), "utf8");
 const missionPlaybackScript = readFileSync(new URL("../viewer/js/mission-playback.js", import.meta.url), "utf8");
+const playbackControllerScript = readFileSync(new URL("../viewer/js/playback-controller.js", import.meta.url), "utf8");
+const hudSessionScript = readFileSync(new URL("../viewer/js/hud-session.js", import.meta.url), "utf8");
 const inline = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const context = vm.createContext({ window: {}, assert, console });
 vm.runInContext(missionPlaybackScript, context);
+vm.runInContext(playbackControllerScript, context);
+vm.runInContext(hudSessionScript, context);
 vm.runInContext(inline.slice(0, inline.lastIndexOf("      main().catch")), context);
 vm.runInContext(`
   const item = (seq, time_s, lat) => ({ seq, time_s, command: 16, lat, lon: 120, alt: 50 });
+  const fallbackController = PlaybackController.create({
+    getBounds: () => ({ start: 10, end: 20 }),
+    getFallbackTime: (bounds) => bounds.end,
+  });
+  assert.equal(fallbackController.time(), 20, 'empty playback time uses the configured fallback');
   const first = { start_s: 100, end_s: 200, items: [item(1, 110, 30), item(16, 190, 31)] };
   const second = { start_s: 200, end_s: null, items: [item(1, 201, 32), item(6, 230, 33)] };
   const source = { id: 'onboard_cmd_test', kind: 'dataflash_cmd', label: 'CMD', route_versions: [first, second] };
@@ -89,15 +98,17 @@ vm.runInContext(`
   let refreshes = 0;
   const config2d = { type: 'track' }, config3d = { type: 'track3d' };
   renderInspector = () => {};
+  updatePlaybackControls = () => {};
   updateTrackControls = () => {};
   renderAllCharts = () => { refreshes++; syncTrackMissionRoute(config2d); syncTrackMissionRoute(config3d); };
   globalThis.requestAnimationFrame = () => 1;
   globalThis.cancelAnimationFrame = () => {};
-  state.trackMarkerTime = 199.9;
-  state.trackPlaybackSpeed = 1;
+  playbackController.setTime(199.9);
+  playbackController.setSpeed(1);
   state.missionRouteViewMode = 'all';
   startTrackPlayback();
-  state.trackPlaybackLastMs = 1000;
+  trackPlaybackStep(1000);
+  refreshes = 0;
   trackPlaybackStep(1200);
   assert.equal(state.missionRouteViewMode, 'current');
   assert.equal(missionRouteEntryAt(source, trackMarkerTime()).index, 1);
@@ -105,7 +116,7 @@ vm.runInContext(`
   assert.equal(config3d.activeRouteKey, entries[1].key);
   assert.ok(config2d.waypointRows.every(row => row._routeActive && row._routeKey === entries[1].key));
   assert.equal(refreshes, 1, 'one render per playback frame');
-  assert.equal(state.inspectorTime, state.trackMarkerTime);
+  assert.equal(state.inspectorTime, trackMarkerTime());
   setTrackMarkerTime(199);
   assert.equal(config2d.activeRouteKey, entries[0].key);
   stopTrackPlayback();

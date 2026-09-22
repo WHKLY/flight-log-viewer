@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 from queue import Queue
 import shutil
@@ -55,6 +56,8 @@ class LauncherChecks(unittest.TestCase):
         self.assertTrue((self.output / "series" / "manifest.json").is_file())
         mission = json.loads((self.output / "series" / "mission-sources.json").read_text())
         self.assertTrue(mission["sources"])
+        parameters = json.loads((self.domains / "parameters.json").read_text())
+        self.assertEqual(parameters["schema_version"], 1)
         self.assertFalse((self.domains / "mission.json").exists())
         self.assertFalse((self.domains / "current_tasks.json").exists())
 
@@ -70,7 +73,7 @@ class LauncherChecks(unittest.TestCase):
     def run_server(self, command, arguments):
         process = subprocess.Popen(
             [*command, *arguments, "--port", "0"], cwd=self.base,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
         )
         lines = Queue()
         reader = Thread(target=lambda: [lines.put(line) for line in process.stdout], daemon=True)
@@ -101,7 +104,9 @@ class LauncherChecks(unittest.TestCase):
 
     def test_skip_build_and_bash_wrapper(self):
         commands = [[sys.executable, str(self.root / "start.py")]]
-        if shutil.which("bash"):
+        # On Windows, terminating Git Bash does not terminate its Python child.
+        # The native Windows path is already covered here; CI covers Bash on POSIX.
+        if os.name != "nt" and shutil.which("bash"):
             commands.append(["bash", str(self.root / "start.bash")])
         for command in commands:
             with self.subTest(command=command[0]):

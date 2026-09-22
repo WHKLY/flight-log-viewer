@@ -31,6 +31,7 @@ def build_dataset(root: Path, dataset: Path) -> None:
             ("summarize_dataset.py", ["--dataset", dataset, "--output", summary]),
             ("inspect_logs.py", ["--dataset", dataset, "--output", staging / "log-inspection.json"]),
             ("extract_dataflash_series.py", ["--dataset", dataset, "--output-dir", series]),
+            ("build_parameters.py", ["--dataset", dataset, "--output", staging / "domains" / "parameters.json"]),
             ("build_mission_sources.py", [
                 "--summary", summary, "--mission", series / "mission.json",
                 "--modes", series / "modes.json", "--output", series / "mission-sources.json",

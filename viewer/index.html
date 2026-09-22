@@ -94,7 +94,7 @@
       }
 
       main.controls-collapsed {
-        grid-template-columns: 42px minmax(0, 1fr);
+        grid-template-columns: 58px minmax(0, 1fr);
       }
 
       main.controls-collapsed .control-panel > :not(.control-strip) {
@@ -124,6 +124,44 @@
 
       main:not(.controls-collapsed) .control-title {
         writing-mode: horizontal-tb;
+      }
+
+      main.controls-collapsed .control-strip {
+        flex-direction: column;
+        justify-content: flex-start;
+        min-height: 132px;
+        overflow: visible;
+        padding: 8px 6px;
+      }
+
+      main.controls-collapsed #toggle-controls {
+        align-items: center;
+        display: inline-flex;
+        font-size: 18px;
+        height: 40px;
+        justify-content: center;
+        min-width: 40px;
+        padding: 0;
+        width: 40px;
+      }
+
+      .view-tabs {
+        align-items: center;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 8px;
+        position: sticky;
+        top: 8px;
+        z-index: 9;
+      }
+
+      .app-view[hidden] {
+        display: none;
       }
 
       header {
@@ -421,11 +459,21 @@
         border: 1px solid var(--line);
         border-radius: 8px;
         max-height: 330px;
-        overflow: auto;
+        overflow-x: scroll;
+        overflow-y: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-gutter: stable;
+        -webkit-overflow-scrolling: touch;
       }
 
       .table-scroll table {
+        width: max-content;
         min-width: 100%;
+      }
+
+      .table-scroll td,
+      .table-scroll th {
+        overflow: visible;
       }
 
       .param-card {
@@ -466,6 +514,153 @@
         box-shadow: var(--shadow);
         margin: 8px 0 12px;
         padding: 8px;
+      }
+
+      .playback-dock {
+        align-items: center;
+        background: var(--panel);
+        background: color-mix(in srgb, var(--panel) 92%, var(--green) 8%);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 8px;
+        grid-template-columns: auto minmax(180px, 1fr) auto;
+        margin: 8px 0;
+        padding: 8px;
+        position: sticky;
+        top: 62px;
+        z-index: 6;
+      }
+
+      .playback-actions {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .playback-dock input[type="range"] {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .playback-time {
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .parameter-workspace {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: var(--shadow);
+        display: grid;
+        gap: 14px;
+        padding: 16px;
+      }
+
+      .parameter-header {
+        align-items: end;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        padding: 0;
+      }
+
+      .parameter-header label,
+      .parameter-search {
+        display: grid;
+        gap: 5px;
+      }
+
+      .parameter-header select,
+      .parameter-search input {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--ink);
+        font: inherit;
+        min-width: min(420px, 70vw);
+        padding: 8px 10px;
+      }
+
+      .parameter-summary {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .parameter-summary > div {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        display: grid;
+        gap: 4px;
+        padding: 10px;
+      }
+
+      .parameter-summary strong {
+        color: var(--green);
+        font-size: 18px;
+      }
+
+      .parameter-diagnostics {
+        display: grid;
+        gap: 8px;
+      }
+
+      .parameter-issue,
+      .parameter-ok {
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--gold);
+        border-radius: 8px;
+        display: grid;
+        gap: 3px;
+        padding: 9px 11px;
+      }
+
+      .parameter-issue-error { border-left-color: var(--red); }
+      .parameter-issue-warning { border-left-color: var(--gold); }
+      .parameter-ok { border-left-color: var(--green); }
+
+      .parameter-issue span,
+      .parameter-ok,
+      .parameter-result-count {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .parameter-filterbar {
+        align-items: end;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: minmax(260px, 0.6fr) minmax(0, 1.4fr);
+      }
+
+      .parameter-categories {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .parameter-categories button {
+        font-size: 12px;
+        padding: 5px 9px;
+      }
+
+      .parameter-table {
+        max-height: min(62vh, 720px);
+      }
+
+      .parameter-table td:nth-child(2),
+      .parameter-table td:nth-child(3) {
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
       }
 
       .track-quickbar {
@@ -878,6 +1073,20 @@
           grid-template-columns: 1fr;
         }
 
+        main.controls-collapsed {
+          grid-template-columns: 1fr;
+        }
+
+        main.controls-collapsed .control-strip {
+          flex-direction: row;
+          justify-content: space-between;
+          min-height: 0;
+        }
+
+        main.controls-collapsed .control-title {
+          writing-mode: horizontal-tb;
+        }
+
         .control-panel {
           max-height: none;
           overflow: visible;
@@ -902,6 +1111,28 @@
           height: 320px;
         }
 
+        .playback-dock {
+          grid-template-columns: 1fr;
+          position: static;
+        }
+
+        .parameter-header,
+        .parameter-filterbar {
+          align-items: stretch;
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .parameter-header select,
+        .parameter-search input {
+          min-width: 0;
+          width: 100%;
+        }
+
+        .parameter-summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
         .panel + .panel {
           border-left: 0;
           border-top: 1px solid var(--line);
@@ -918,7 +1149,7 @@
   <body>
     <main>
       <aside class="control-panel">
-        <div class="control-strip"><span class="control-title">Controls</span><button id="toggle-controls">Hide</button></div>
+        <div class="control-strip"><span class="control-title">Controls</span><button id="toggle-controls" aria-label="收起控制栏" title="收起控制栏">Hide</button></div>
         <header>
           <h1>Flight Log Viewer</h1>
           <p>按控制层级查看日志、任务、参数和输出。</p>
@@ -928,11 +1159,20 @@
         <div id="time-inspector"></div>
       </aside>
       <section class="viewer-panel">
-        <div id="app"></div>
+        <nav class="view-tabs" aria-label="Viewer mode">
+          <button class="active" data-view-mode="review">Review</button>
+          <button data-view-mode="parameters">Parameters</button>
+        </nav>
+        <div id="app" class="app-view" data-app-view="review"></div>
+        <div id="parameter-app" class="app-view" data-app-view="parameters" hidden></div>
       </section>
     </main>
 
     <script src="js/mission-playback.js"></script>
+    <script src="js/playback-controller.js"></script>
+    <script src="js/hud-session.js"></script>
+    <script src="js/parameter-model.js"></script>
+    <script src="js/parameter-view.js"></script>
     <script src="js/track-camera.js"></script>
     <script src="js/track-hud.js"></script>
     <script>
@@ -987,12 +1227,8 @@
         trackShowPath: true,
         trackShowWaypoints: true,
         trackMarkerScope: "window",
-        trackMarkerTime: null,
-        trackPlaying: false,
-        trackPlaybackSpeed: 1,
-        trackPlaybackLastMs: null,
-        trackPlaybackFrame: null,
         trackHudVisible: true,
+        activeView: "review",
         missionSourceMode: "auto",
         missionOverrideStart: "",
         missionOverrideEnd: "",
@@ -1021,6 +1257,24 @@
       let currentTaskData = { sources: [] };
       let missionOverrideData = { rules: [] };
       let inspectorContext = null;
+      const playbackController = PlaybackController.create({
+        getBounds: () => trackMarkerBounds(),
+        getFallbackTime: () => state.range.end,
+        onTime: (snapshot) => {
+          syncTrackInspector(snapshot.time);
+          renderAllCharts();
+        },
+        onState: () => updatePlaybackControls(),
+      });
+      const hudSession = HudSession.create({
+        onCommand: (command, value) => {
+          if (command === "toggle") toggleTrackPlayback();
+          else if (command === "play") startTrackPlayback();
+          else if (command === "pause") stopTrackPlayback();
+          else if (command === "time") setTrackMarkerTime(value);
+          else if (command === "speed") playbackController.setSpeed(value);
+        },
+      });
 
       async function loadJson(path) {
         const response = await fetch(path);
@@ -1608,8 +1862,7 @@
 
       function parameterResolveTime() {
         if (finite(state.inspectorTime)) return state.inspectorTime;
-        if (finite(state.trackMarkerTime)) return trackMarkerTime();
-        return state.range.end;
+        return trackMarkerTime();
       }
 
       function selectedParameterSet() {
@@ -1927,6 +2180,8 @@
           <div class="readout" id="${id}-readout"></div>
         </div>
         <div class="chart-control-bar">
+          <button data-chart-playback-toggle="${id}">Play</button>
+          <span class="playback-time" data-chart-playback-time="${id}"></span>
           <button data-scale-reset="${id}">Reset scale</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
@@ -1943,6 +2198,8 @@
           <div class="readout" id="${id}-readout"></div>
         </div>
         <div class="chart-control-bar">
+          <button data-chart-playback-toggle="${id}">Play</button>
+          <span class="playback-time" data-chart-playback-time="${id}"></span>
           <button data-scale-reset="${id}">Reset 3D</button>
           <button data-scale-in="${id}">Scale +</button>
           <button data-scale-out="${id}">Scale -</button>
@@ -2069,10 +2326,7 @@
       }
 
       function trackMarkerTime() {
-        const bounds = trackMarkerBounds();
-        const fallback = finite(state.range.end) ? state.range.end : bounds.start;
-        const value = finite(state.trackMarkerTime) ? state.trackMarkerTime : fallback;
-        return clamp(value, bounds.start, bounds.end);
+        return playbackController.time();
       }
 
       function syncTrackInspector(time) {
@@ -2080,56 +2334,25 @@
         renderInspector();
       }
 
-      function setTrackMarkerTime(time, syncInspector = true) {
-        const bounds = trackMarkerBounds();
-        state.trackMarkerTime = clamp(Number(time), bounds.start, bounds.end);
-        if (syncInspector) syncTrackInspector(state.trackMarkerTime);
-        renderAllCharts();
+      function setTrackMarkerTime(time) {
+        return playbackController.setTime(time);
       }
 
       function stopTrackPlayback() {
-        state.trackPlaying = false;
-        state.trackPlaybackLastMs = null;
-        if (state.trackPlaybackFrame) cancelAnimationFrame(state.trackPlaybackFrame);
-        state.trackPlaybackFrame = null;
-        updateTrackControls();
+        playbackController.pause();
       }
 
       function trackPlaybackStep(nowMs) {
-        if (!state.trackPlaying) return;
-        const bounds = trackMarkerBounds();
-        const last = state.trackPlaybackLastMs ?? nowMs;
-        const dt = Math.max(0, (nowMs - last) / 1000) * state.trackPlaybackSpeed;
-        state.trackPlaybackLastMs = nowMs;
-        const next = trackMarkerTime() + dt;
-        if (next >= bounds.end) {
-          state.trackMarkerTime = bounds.end;
-          syncTrackInspector(state.trackMarkerTime);
-          state.trackPlaying = false;
-          state.trackPlaybackLastMs = null;
-          state.trackPlaybackFrame = null;
-          renderAllCharts();
-          return;
-        }
-        state.trackMarkerTime = next;
-        syncTrackInspector(state.trackMarkerTime);
-        renderAllCharts();
-        state.trackPlaybackFrame = requestAnimationFrame(trackPlaybackStep);
+        playbackController.tick(nowMs);
       }
 
       function startTrackPlayback() {
-        const bounds = trackMarkerBounds();
-        if (trackMarkerTime() >= bounds.end) state.trackMarkerTime = bounds.start;
         state.missionRouteViewMode = "current";
-        state.trackPlaying = true;
-        state.trackPlaybackLastMs = null;
-        if (state.trackPlaybackFrame) cancelAnimationFrame(state.trackPlaybackFrame);
-        state.trackPlaybackFrame = requestAnimationFrame(trackPlaybackStep);
-        updateTrackControls();
+        playbackController.play();
       }
 
       function toggleTrackPlayback() {
-        if (state.trackPlaying) stopTrackPlayback();
+        if (playbackController.snapshot().playing) stopTrackPlayback();
         else startTrackPlayback();
       }
 
@@ -2146,10 +2369,22 @@
         </div>`;
       }
 
-      function trackControlsHtml() {
+      function playbackDockHtml() {
         const bounds = trackMarkerBounds();
         const span = Math.max(bounds.end - bounds.start, 1);
         const step = Math.max(span / 1200, 0.02);
+        const playback = playbackController.snapshot();
+        return `<div class="playback-dock">
+          <div class="playback-actions">
+            <button data-playback-toggle class="${playback.playing ? "active" : ""}">${playback.playing ? "Pause" : "Play"}</button>
+            ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${playback.speed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
+          </div>
+          <input id="track-marker-time" aria-label="Playback time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}">
+          <span class="playback-time" id="track-marker-text">${fmt.format(trackMarkerTime())}s</span>
+        </div>`;
+      }
+
+      function trackControlsHtml() {
         const modeButtons = trackModeNames().map((name) => `<button class="${state.trackModeFilter === name ? "active" : ""}" data-track-mode-filter="${escapeHtml(name)}">${name === "all" ? "All modes" : escapeHtml(name)}</button>`).join("");
         const bothVisible = state.trackShowPath && state.trackShowWaypoints;
         const cameraModes = [
@@ -2160,26 +2395,12 @@
         ].map(([mode, label]) => `<button class="${state.track3dViewMode === mode ? "active" : ""}" data-track-camera-mode="${mode}">${label}</button>`).join("");
         return `<div class="track-controls">
           <div class="track-quickbar">
-            <button id="track-hud-toggle" class="${state.trackHudVisible ? "active" : ""}">${state.trackHudVisible ? "隐藏 HUD" : "显示 HUD"}</button>
             <button class="${state.trackShowPath ? "active" : ""}" data-track-visible="path">航迹 ${state.trackShowPath ? "显示" : "隐藏"}</button>
             <button class="${state.trackShowWaypoints ? "active" : ""}" data-track-visible="waypoints">Waypoint ${state.trackShowWaypoints ? "显示" : "隐藏"}</button>
             <button class="${bothVisible ? "active" : ""}" data-track-visible="both">${bothVisible ? "隐藏航迹+Waypoint" : "显示航迹+Waypoint"}</button>
-            <button id="track-play-toggle">${state.trackPlaying ? "Pause" : "Play"}</button>
             <button id="track-marker-inspect">Marker=Inspect</button>
             <button id="track-marker-path-end">Marker=Path end</button>
           </div>
-          <details class="track-details" open>
-            <summary>Plane marker / playback</summary>
-            <div class="track-details-body">
-              <div class="track-section-title"><strong>Plane marker</strong><span class="range-text" id="track-marker-text"></span></div>
-              <div class="track-button-row">
-                <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Marker range: window</button>
-                <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Marker range: full</button>
-                ${[0.25, 0.5, 1, 2, 4, 8].map((speed) => `<button class="${state.trackPlaybackSpeed === speed ? "active" : ""}" data-track-speed="${speed}">${speed}x</button>`).join("")}
-              </div>
-              <label class="track-slider-row">Plane time<input id="track-marker-time" type="range" min="${bounds.start}" max="${bounds.end}" step="${step}" value="${trackMarkerTime()}"></label>
-            </div>
-          </details>
           <details class="track-details">
             <summary>Path / flight mode filters</summary>
             <div class="track-details-body">
@@ -2187,6 +2408,8 @@
               <div class="track-button-row">
                 <button class="${state.trackPathMode === "window" ? "active" : ""}" data-track-path-mode="window">显示当前窗口航迹</button>
                 <button class="${state.trackPathMode === "full" ? "active" : ""}" data-track-path-mode="full">显示全程航迹</button>
+                <button class="${state.trackMarkerScope === "window" ? "active" : ""}" data-track-marker-scope="window">Marker: window</button>
+                <button class="${state.trackMarkerScope === "full" ? "active" : ""}" data-track-marker-scope="full">Marker: full</button>
               </div>
               <div class="track-button-row">${modeButtons}</div>
             </div>
@@ -2201,6 +2424,8 @@
               <div class="track-section-title"><strong>3D camera</strong><span class="range-text" id="track-3d-view-text"></span></div>
               <div class="track-button-row">${cameraModes}</div>
               <div class="track-button-row">
+                <button id="track-hud-toggle" class="${state.trackHudVisible ? "active" : ""}">${state.trackHudVisible ? "隐藏 HUD" : "显示 HUD"}</button>
+                <button id="track-hud-popout">弹出 HUD</button>
                 <button class="${state.track3dOverheadLock ? "active" : ""}" data-track-3d-lock-toggle>俯瞰限制 ${state.track3dOverheadLock ? "开" : "关"}</button>
               </div>
             </div>
@@ -2208,18 +2433,32 @@
         </div>`;
       }
 
-      function updateTrackControls() {
-        const bounds = trackMarkerBounds();
-        const marker = trackMarkerTime();
+      function updatePlaybackControls() {
+        const playback = playbackController.snapshot();
+        document.querySelectorAll("[data-playback-toggle], [data-chart-playback-toggle]").forEach((button) => {
+          button.textContent = playback.playing ? "Pause" : "Play";
+          button.classList.toggle("active", playback.playing);
+        });
+        document.querySelectorAll("[data-chart-playback-time]").forEach((node) => {
+          node.textContent = `${fmt.format(playback.time)}s`;
+        });
+        document.querySelectorAll("[data-track-speed]").forEach((button) => {
+          button.classList.toggle("active", Number(button.dataset.trackSpeed) === playback.speed);
+        });
         const slider = document.querySelector("#track-marker-time");
         if (slider) {
-          slider.min = bounds.start;
-          slider.max = bounds.end;
-          slider.step = Math.max((bounds.end - bounds.start) / 1200, 0.02);
-          if (document.activeElement !== slider) slider.value = marker;
+          slider.min = playback.bounds.start;
+          slider.max = playback.bounds.end;
+          slider.step = Math.max((playback.bounds.end - playback.bounds.start) / 1200, 0.02);
+          if (document.activeElement !== slider) slider.value = playback.time;
         }
         const markerText = document.querySelector("#track-marker-text");
-        if (markerText) markerText.textContent = `${fmt.format(marker)}s | ${fmt.format(bounds.start)}s..${fmt.format(bounds.end)}s`;
+        if (markerText) markerText.textContent = `${fmt.format(playback.time)}s | ${fmt.format(playback.bounds.start)}s..${fmt.format(playback.bounds.end)}s`;
+      }
+
+      function updateTrackControls() {
+        updatePlaybackControls();
+        const marker = trackMarkerTime();
         const pathRange = trackPathRange();
         const pathText = document.querySelector("#track-path-text");
         if (pathText) pathText.textContent = `${state.trackPathMode === "full" ? "Full" : "Window"}: ${fmt.format(pathRange.start)}s..${fmt.format(pathRange.end)}s | ${state.trackModeFilter === "all" ? "all modes" : state.trackModeFilter}`;
@@ -2244,14 +2483,6 @@
         document.querySelectorAll("[data-track-marker-scope]").forEach((button) => {
           button.classList.toggle("active", button.dataset.trackMarkerScope === state.trackMarkerScope);
         });
-        document.querySelectorAll("[data-track-speed]").forEach((button) => {
-          button.classList.toggle("active", Number(button.dataset.trackSpeed) === state.trackPlaybackSpeed);
-        });
-        const playButton = document.querySelector("#track-play-toggle");
-        if (playButton) {
-          playButton.textContent = state.trackPlaying ? "Pause" : "Play";
-          playButton.classList.toggle("active", state.trackPlaying);
-        }
         const hudButton = document.querySelector("#track-hud-toggle");
         if (hudButton) {
           hudButton.textContent = state.trackHudVisible ? "隐藏 HUD" : "显示 HUD";
@@ -2282,7 +2513,7 @@
       }
 
       function bindTrackControls() {
-        const controls = document.querySelector(".track-controls");
+        const controls = document.querySelector('[data-layer="1"]');
         if (!controls || controls.dataset.bound === "true") return;
         controls.dataset.bound = "true";
 
@@ -2293,6 +2524,13 @@
           if (button.id === "track-hud-toggle") {
             state.trackHudVisible = !state.trackHudVisible;
             updateTrackControls();
+            updateTrackHud();
+            return;
+          }
+
+          if (button.id === "track-hud-popout") {
+            const opened = hudSession.open("hud.html");
+            button.textContent = opened ? "HUD 已弹出" : "浏览器阻止了弹窗";
             updateTrackHud();
             return;
           }
@@ -2333,8 +2571,7 @@
           }
 
           if (button.dataset.trackSpeed) {
-            state.trackPlaybackSpeed = Number(button.dataset.trackSpeed) || 1;
-            updateTrackControls();
+            playbackController.setSpeed(button.dataset.trackSpeed);
             return;
           }
 
@@ -2409,7 +2646,7 @@
             return;
           }
 
-          if (button.id === "track-play-toggle") {
+          if (button.hasAttribute("data-playback-toggle")) {
             toggleTrackPlayback();
             return;
           }
@@ -2466,14 +2703,12 @@
 
       function updateTrackHud() {
         const canvas = document.querySelector("#track-hud-overlay");
-        if (!canvas) return;
-        canvas.classList.toggle("hidden", !state.trackHudVisible);
+        if (canvas) canvas.classList.toggle("hidden", !state.trackHudVisible);
         const toggle = document.querySelector("#track-hud-toggle");
         if (toggle) {
           toggle.textContent = state.trackHudVisible ? "隐藏 HUD" : "显示 HUD";
           toggle.classList.toggle("active", state.trackHudVisible);
         }
-        if (!state.trackHudVisible) return;
         const trackConfig = charts.get("track-chart");
         const track3dConfig = charts.get("track-3d-chart");
         if (!trackConfig && !track3dConfig) return;
@@ -2494,7 +2729,7 @@
         const att = attSample?.row || {};
         const mode = findModeAt(time);
         const mission = missionInfoAt(time);
-        window.TrackHud?.draw(canvas, {
+        const values = {
           modeName: mode?.name || "unknown",
           mission,
           roll: numericFrom(att, ["Roll"]),
@@ -2511,7 +2746,29 @@
           navRoll: numericFrom(nav, ["NavRoll"]),
           navPitch: numericFrom(nav, ["NavPitch"]),
           navHeading: numericFrom(ntun, ["NavBrg", "TBrg"]),
+        };
+        if (canvas && state.trackHudVisible) window.TrackHud?.draw(canvas, values);
+        hudSession.publish({ values, playback: playbackController.snapshot() });
+      }
+
+      function setActiveView(mode) {
+        state.activeView = mode === "parameters" ? "parameters" : "review";
+        document.querySelectorAll("[data-view-mode]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.viewMode === state.activeView);
         });
+        document.querySelectorAll("[data-app-view]").forEach((view) => {
+          view.hidden = view.dataset.appView !== state.activeView;
+        });
+        if (state.activeView === "review") renderAllCharts();
+      }
+
+      function bindViewTabs() {
+        document.querySelectorAll("[data-view-mode]").forEach((button) => {
+          if (button.dataset.bound === "true") return;
+          button.dataset.bound = "true";
+          button.addEventListener("click", () => setActiveView(button.dataset.viewMode));
+        });
+        setActiveView(state.activeView);
       }
 
       function renderToolbar() {
@@ -3689,6 +3946,7 @@
         const zoomIn = document.querySelector(`[data-scale-in="${config.id}"]`);
         const zoomOut = document.querySelector(`[data-scale-out="${config.id}"]`);
         const hClear = document.querySelector(`[data-href-clear="${config.id}"]`);
+        const playbackToggle = document.querySelector(`[data-chart-playback-toggle="${config.id}"]`);
         if (!reset || !zoomIn || !zoomOut || config.controlsBound) return;
         config.controlsBound = true;
         if (config.type === "track") {
@@ -3732,6 +3990,7 @@
           state.hRefs[config.id] = [];
           renderAllCharts();
         });
+        playbackToggle?.addEventListener("click", toggleTrackPlayback);
       }
 
       function syncTrackMissionRoute(config) {
@@ -4154,8 +4413,10 @@
           loadJsonOptional("../public-data/domains/current_tasks.json"),
           loadJsonOptional("../public-data/series/mission-sources.json"),
           loadJsonOptional("../project-data/mission-overrides.json"),
+          loadJsonOptional("../public-data/domains/parameters.json"),
+          loadJsonOptional("data/parameter-catalog-plane-4.7.json"),
         ]);
-        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw, missionDomainRaw, currentTasksRaw, missionSourcesRaw, missionOverridesRaw] = loaded;
+        const [summaryRaw, manifestRaw, trackRaw, missionRaw, attitudeRaw, navigationRaw, tecsRaw, pidRaw, motionRaw, ioRaw, eventsRaw, modesRaw, missionDomainRaw, currentTasksRaw, missionSourcesRaw, missionOverridesRaw, parameterDomainRaw, parameterCatalogRaw] = loaded;
         const summary = summaryRaw || defaultSummary();
         const manifest = manifestRaw || defaultManifest();
         const track = withMessages(trackRaw, ["POS", "GPS"]);
@@ -4215,7 +4476,11 @@
         document.querySelector("#toggle-controls")?.addEventListener("click", () => {
           const root = document.querySelector("main");
           root.classList.toggle("controls-collapsed");
-          document.querySelector("#toggle-controls").textContent = root.classList.contains("controls-collapsed") ? "Show" : "Hide";
+          const collapsed = root.classList.contains("controls-collapsed");
+          const toggle = document.querySelector("#toggle-controls");
+          toggle.textContent = collapsed ? "›" : "Hide";
+          toggle.setAttribute("aria-label", collapsed ? "展开控制栏" : "收起控制栏");
+          toggle.title = collapsed ? "展开控制栏" : "收起控制栏";
           renderAllCharts();
         });
 
@@ -4265,7 +4530,7 @@
             1,
             "Track / Geometry",
             "当前任务、航迹窗口和 3D 姿态复现。",
-            `${missionStatusStripHtml()}${trackControlsHtml()}${chartPanel("track-chart")}${track3dPanel()}`,
+            `${missionStatusStripHtml()}${playbackDockHtml()}${chartPanel("track-chart")}${trackControlsHtml()}${track3dPanel()}`,
             `<details open><summary>Waypoints</summary>${trackWaypointPanelHtml()}</details><details><summary>Track metadata</summary><div class="note">Lat ${stats(track.messages.POS, "Lat")}<br>Lng ${stats(track.messages.POS, "Lng")}<br>Alt ${stats(track.messages.POS, "Alt")}<br>ATT ${attitude.messages.ATT.length}</div></details>`,
           ),
           layer(
@@ -4412,6 +4677,13 @@
           { id: "custom-chart", type: "line", yLabel: "custom", series: [] },
         ]);
         bindCustomChartControls(buildDataCatalog([track, mission, attitude, navigation, tecs, pid, motion, io, events]));
+        const parameterModel = ParameterModel.create({
+          domain: parameterDomainRaw || {},
+          summary,
+          catalog: parameterCatalogRaw || {},
+        });
+        ParameterView.create({ root: document.querySelector("#parameter-app"), model: parameterModel });
+        bindViewTabs();
         window.addEventListener("resize", renderAllCharts);
       }
 

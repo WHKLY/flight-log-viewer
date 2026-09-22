@@ -1,6 +1,6 @@
 # Project Architecture
 
-Date: 2026-08-25
+Date: 2026-09-22
 
 ## Purpose
 
@@ -21,7 +21,9 @@ No backend server is required after JSON generation. `python3 -m http.server` is
 | `data/raw/` | Local `.BIN`, `.tlog`, `.waypoints`, `.param`, PDFs, and copied field documents. | Ignored. Do not publish flight data by default. |
 | `scripts/` | Rebuildable data pipeline. | Tracked. |
 | `public-data/` | Generated JSON consumed by the viewer. | Ignored except `.gitkeep`. |
-| `viewer/index.html` | Single-page dashboard: UI, chart rendering, 2D/3D track, HUD, inspector. | Tracked. |
+| `viewer/index.html` | Static document shell and feature mounting points. | Tracked. |
+| `viewer/js/` | Deep browser modules for mission playback, shared playback, HUD sessions, Review, and Parameter mode. | Tracked. |
+| `viewer/data/` | Versioned, portable interpretation catalogs used by the static viewer. | Tracked. |
 | `docs/source-review/` | Stable control-model, compatibility, and extraction notes. | Tracked, except generated extracted text. |
 | `docs/notes/` | Development notes and rollback context. | Tracked. |
 | `src/flight_log_viewer/` | Python package namespace reserved for later refactoring. | Tracked. |
@@ -62,6 +64,27 @@ Main responsibilities:
 - Write compatibility metadata such as log firmware, parser source, mode map source, and explanation source.
 - Emit empty groups when source data is missing so partial datasets remain viewable.
 
+### `scripts/mavlink_frames.py`
+
+Dependency-free framing seam shared by mission and parameter domains:
+
+- Scans MAVLink 1 and MAVLink 2 streams.
+- Validates message CRC extras before decoding payloads.
+- Preserves system/component identity and timestamped `.tlog` relative time.
+- Does not interpret domain payloads; each domain owns its message schema.
+
+### `scripts/build_parameters.py`
+
+Writes `public-data/domains/parameters.json`.
+
+Main responsibilities:
+
+- Recursively enumerate `.param`, `.bin`, and `.tlog` sources without silently merging systems or files.
+- Normalize parameter snapshots and DataFlash timelines behind one source interface.
+- Decode MAVLink `PARAM_VALUE` and `PARAM_EXT_VALUE` records.
+- Report declared-count/index coverage for TLog source completeness.
+- Preserve source file, source kind, system ID, and component ID for explicit switching in the viewer.
+
 ## Viewer Layers
 
 The viewer is organized by control layer rather than raw message name:
@@ -76,6 +99,10 @@ The viewer is organized by control layer rather than raw message name:
 | Motion / IMU | `IMU`, `RATE`, `VIBE`, `XKF*`, `NKF*` | Acceleration, gyro, vibration, estimator velocity and motion evidence. |
 | I/O Outputs | `RCIN`, `RCOU` | Pilot input and actuator/throttle output values. |
 | Custom Data | Any loaded numeric field | Ad-hoc plotting for fields not promoted to fixed panels. |
+
+The Review/Parameter shell, shared playback module, HUD popout, and unified parameter domain are specified in [`docs/notes/parameter-mode-and-playback-refactor-plan.md`](notes/parameter-mode-and-playback-refactor-plan.md).
+
+Parameter mode is split into two browser modules: `ParameterModel` contains source, classification, search, and diagnostic rules; `ParameterView` is the DOM adapter. The Plane 4.7 catalog under `viewer/data/` supplies portable aliases and control-layer metadata.
 
 ## Track And HUD Design
 

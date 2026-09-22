@@ -49,7 +49,7 @@ Relative `--dataset` paths are relative to the project root, not the terminal's 
 
 Options: `--port` defaults to 8000 (`--port 0` selects a free port); `--host` defaults to `127.0.0.1`. Use `--host 0.0.0.0` for LAN access. The launcher prints the actual viewer URL; Ctrl+C stops the server. An occupied port is reported before data generation begins.
 
-A build runs all four generators, including mission-source reconstruction. Output is staged until all generators succeed. A successful build removes stale `domains/mission.json` and `domains/current_tasks.json` because this branch generates `series/mission-sources.json`; this prevents the viewer from using mission data left by another dataset. `--skip-build` preserves existing domain files.
+A build runs all five generators, including parameter-domain extraction and mission-source reconstruction. Output is staged until all generators succeed. A successful build removes stale `domains/mission.json` and `domains/current_tasks.json` because this branch generates `series/mission-sources.json`; this prevents the viewer from using mission data left by another dataset. `--skip-build` preserves existing domain files.
 
 ## Project Layout
 
@@ -76,6 +76,7 @@ From the project root:
 python3 scripts/summarize_dataset.py
 python3 scripts/inspect_logs.py
 python3 scripts/extract_dataflash_series.py
+python3 scripts/build_parameters.py
 python3 scripts/build_mission_sources.py
 ```
 
@@ -91,6 +92,7 @@ Generated outputs:
 public-data/dataset-summary.json
 public-data/log-inspection.json
 public-data/series/*.json
+public-data/domains/parameters.json
 ```
 
 These generated JSON files are ignored by git and can be deleted/rebuilt at any time from `data/raw/`.
@@ -126,10 +128,12 @@ If another device on the same network needs access, use the tablet's LAN IP inst
 Use this quick release check after changes:
 
 ```bash
-python3 -m py_compile start.py scripts/extract_dataflash_series.py scripts/inspect_logs.py scripts/summarize_dataset.py scripts/build_mission_sources.py
-python3 -m unittest tests.test_mission_pipeline
+python3 -m py_compile start.py scripts/extract_dataflash_series.py scripts/inspect_logs.py scripts/summarize_dataset.py scripts/mavlink_frames.py scripts/build_parameters.py scripts/build_mission_sources.py
+python3 -m unittest tests.test_mission_pipeline tests.test_parameter_pipeline
 python3 scripts/check_launcher.py
 node scripts/check_mission_playback.mjs
+node scripts/check_parameter_mode.mjs
+node scripts/check_hud_session.mjs
 python3 -c "from html.parser import HTMLParser; from pathlib import Path; HTMLParser().feed(Path('viewer/index.html').read_text()); print('viewer html ok')"
 curl -I http://127.0.0.1:8000/viewer/index.html
 git diff --check
